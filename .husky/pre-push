@@ -1,0 +1,1 @@
+pnpm exec lerna run build --since --include-dependents && pnpm exec lerna run test --since --include-dependents

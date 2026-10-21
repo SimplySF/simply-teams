@@ -1,0 +1,39 @@
+name: docs
+
+# The documentation itself now lives in the packages (packages/*/docs) and is published by the
+# combined site at SimplySF/simply-cli. All this workflow does is keep the old Pages URL working:
+# it deploys a redirect that carries every /simply-teams/... path to its /simply-cli/teams/...
+# equivalent, so existing links and bookmarks do not break.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'redirect/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: redirect
+      - id: deployment
+        uses: actions/deploy-pages@v4

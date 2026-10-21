@@ -1,0 +1,12 @@
+packages:
+  - 'packages/*'
+onlyBuiltDependencies:
+  - nx
+allowBuilds:
+  esbuild: true
+  nx: true
+  unrs-resolver: true
+  # The broker binaries ship prebuilt in @azure/msal-node-runtime, and this package's install script is a no-op.
+  '@azure/msal-node-extensions': false
+  # msal-node-extensions' ESM entry imports keytar eagerly, so its prebuilt binary must be fetched at install.
+  keytar: true

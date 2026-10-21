@@ -1,0 +1,73 @@
+name: tests
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node_version: ['lts/*', 'lts/-1']
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: pnpm
+
+      - uses: google/wireit@setup-github-actions-caching/v2
+        continue-on-error: true
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # The CLI's tests resolve @simplysf/simply-teams-core through its compiled lib/, which
+      # does not exist on a fresh checkout. Running the CLI's unit tests here, before any build,
+      # proves the wireit dependency on core's compile is wired for every vitest entry point;
+      # without it this step races and fails.
+      - name: CLI tests from a clean checkout
+        run: pnpm --filter @simplysf/simply-teams run test:only
+
+      - run: pnpm run build
+
+      - name: pnpm test
+        run: pnpm test
+
+  windows-unit-tests:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        node_version: ['lts/*', 'lts/-1']
+      fail-fast: false
+    steps:
+      - run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: pnpm
+
+      - uses: google/wireit@setup-github-actions-caching/v2
+        continue-on-error: true
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - run: pnpm run build
+
+      - name: Verify command snapshots are committed
+        run: git diff --exit-code -- "**/command-snapshot.json"
+
+      - name: pnpm test
+        run: pnpm test

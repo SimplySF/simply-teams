@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+      - prerelease/**
+    tags-ignore:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Prerelease identifier (beta, dev, etc). Leave blank to only publish already-tagged versions that are missing from npm.'
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - uses: pnpm/setup@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - run: pnpm run build
+
+      - run: pnpm test
+
+      - name: Version (release)
+        if: github.event_name == 'push' && github.ref_name == 'main'
+        run: pnpm exec lerna version --conventional-commits --create-release github --yes
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      - name: Version (prerelease)
+        if: (github.event_name == 'push' && github.ref_name != 'main') || (github.event_name == 'workflow_dispatch' && inputs.prerelease)
+        run: pnpm exec lerna version --conventional-commits --conventional-prerelease --preid "${{ inputs.prerelease || 'dev' }}" --create-release github --yes
+        env:
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+      # Publishes whatever versions are committed to git but still missing from npm. Deliberately
+      # unconditional (not gated on the version steps above having run): this makes it self-healing
+      # if a *previous* run's version step succeeded (git tagged/pushed) but its npm publish step
+      # failed partway through a batch, since lerna version and npm publish are not atomic together.
+      - name: Publish
+        run: pnpm exec lerna publish from-package --yes
+        env:
+          NPM_CONFIG_PROVENANCE: true

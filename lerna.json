@@ -1,0 +1,11 @@
+{
+  "version": "independent",
+  "npmClient": "pnpm",
+  "packages": ["packages/*"],
+  "command": {
+    "version": {
+      "message": "chore(release): publish [skip ci]",
+      "granularPathspec": false
+    }
+  }
+}

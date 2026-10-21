@@ -1,0 +1,234 @@
+{
+  "name": "@simplysf/simply-teams",
+  "description": "Command-line interface for searching and reading Microsoft Teams",
+  "version": "0.0.0",
+  "author": "@ClayChipps",
+  "homepage": "https://github.com/SimplySF/simply-teams",
+  "bugs": "https://github.com/SimplySF/simply-teams/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SimplySF/simply-teams",
+    "directory": "packages/simply-teams"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "/docs",
+    "/lib",
+    "/oclif.lock",
+    "/oclif.manifest.json"
+  ],
+  "keywords": [
+    "oclif",
+    "microsoft-teams",
+    "teams",
+    "microsoft-graph",
+    "simply"
+  ],
+  "license": "Apache-2.0",
+  "exports": "./lib/index.js",
+  "type": "module",
+  "types": "./lib/index.d.ts",
+  "oclif": {
+    "additionalVersionFlags": [
+      "-v"
+    ],
+    "additionalHelpFlags": [
+      "-h"
+    ],
+    "bin": "simply",
+    "commands": "./lib/commands",
+    "devPlugins": [
+      "@oclif/plugin-command-snapshot"
+    ],
+    "flexibleTaxonomy": true,
+    "plugins": [],
+    "repositoryPrefix": "<%- repo %>/blob/@simplysf/simply-teams@<%- version %>/packages/simply-teams/<%- commandPath %>",
+    "topicSeparator": " ",
+    "topics": {
+      "teams": {
+        "description": "Work with Microsoft Teams."
+      },
+      "teams:auth": {
+        "description": "Sign in to Microsoft Teams and check the session."
+      },
+      "teams:message": {
+        "description": "Search messages and read one in context."
+      },
+      "teams:chat": {
+        "description": "List your chats and read their messages."
+      },
+      "teams:team": {
+        "description": "List the teams you belong to."
+      },
+      "teams:channel": {
+        "description": "List channels and read their posts."
+      }
+    }
+  },
+  "dependencies": {
+    "@oclif/core": "^4.11.2",
+    "@simplysf/simply-teams-auth": "workspace:^0.0.0",
+    "@simplysf/simply-teams-core": "workspace:^0.0.0"
+  },
+  "devDependencies": {
+    "@oclif/plugin-command-snapshot": "^5.4.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "oclif": "^4.23.0",
+    "shx": "^0.4.0",
+    "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "wireit",
+    "compile": "wireit",
+    "fix-license": "eslint src test --fix --rule \"header/header: [2]\"",
+    "format": "wireit",
+    "lint": "wireit",
+    "postpack": "shx rm -f oclif.manifest.json",
+    "prepack": "pnpm run compile && oclif manifest",
+    "readme": "oclif readme --no-aliases",
+    "test": "wireit",
+    "test:coverage": "wireit",
+    "test:only": "wireit",
+    "test:watch": "wireit"
+  },
+  "wireit": {
+    "build": {
+      "dependencies": [
+        "command-snapshot",
+        "compile",
+        "lint"
+      ]
+    },
+    "compile": {
+      "command": "tsc -p . --pretty --incremental",
+      "files": [
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json"
+      ],
+      "output": [
+        "lib/**",
+        "*.tsbuildinfo"
+      ],
+      "clean": "if-file-deleted",
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ]
+    },
+    "format": {
+      "command": "prettier --write \"+(src|test)/**/*.+(ts|js|json)|command-snapshot.json\"",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "command-snapshot.json",
+        ".prettier*"
+      ],
+      "output": []
+    },
+    "lint": {
+      "command": "eslint src test --color --cache --cache-location .eslintcache",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "**/.eslint*",
+        "**/tsconfig.json",
+        "../../eslint.config.mjs",
+        "../../tsconfig.json"
+      ],
+      "output": [],
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ]
+    },
+    "test": {
+      "dependencies": [
+        "test:compile",
+        "test:only",
+        "lint"
+      ]
+    },
+    "command-snapshot": {
+      "command": "node --loader ts-node/esm --no-warnings=ExperimentalWarning \"./bin/dev.js\" snapshot:generate && prettier --write command-snapshot.json",
+      "files": [
+        "src/**/*.ts"
+      ],
+      "output": [
+        "command-snapshot.json"
+      ],
+      "dependencies": [
+        "compile"
+      ]
+    },
+    "test:compile": {
+      "command": "tsc -p \"./test\" --pretty",
+      "files": [
+        "test/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json"
+      ],
+      "output": [],
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ]
+    },
+    "test:only": {
+      "command": "vitest run --project simply-teams",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "files": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json",
+        "vitest.config.ts",
+        "!*.nut.ts"
+      ],
+      "output": [],
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ]
+    },
+    "test:coverage": {
+      "command": "vitest run --coverage --project simply-teams",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ],
+      "files": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json",
+        "vitest.config.ts",
+        "!*.nut.ts"
+      ],
+      "output": [
+        "coverage/**"
+      ]
+    },
+    "test:watch": {
+      "command": "vitest watch --project simply-teams",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "dependencies": [
+        "../simply-teams-core:compile",
+        "../simply-teams-auth:compile"
+      ],
+      "service": true
+    }
+  }
+}

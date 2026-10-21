@@ -1,0 +1,56 @@
+{
+  "name": "@simplysf/simply-teams-monorepo",
+  "private": true,
+  "description": "Command-line interface and MCP server for searching Microsoft Teams, built by SimplySF",
+  "author": "@ClayChipps",
+  "homepage": "https://github.com/SimplySF/simply-teams",
+  "bugs": "https://github.com/SimplySF/simply-teams/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SimplySF/simply-teams"
+  },
+  "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || ^26.0.0"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "build": "lerna run build",
+    "compile": "lerna run compile",
+    "format": "lerna run format",
+    "lint": "lerna run lint",
+    "prepare": "husky",
+    "reset": "node scripts/reset.mjs",
+    "reset:install": "node scripts/reset.mjs --install",
+    "test": "lerna run test",
+    "test:only": "lerna run test:only"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@eslint/eslintrc": "^3.3.6",
+    "@eslint/js": "^10.0.1",
+    "@oclif/plugin-command-snapshot": "^5.4.0",
+    "@types/debug": "^4.1.12",
+    "@types/node": "^26.6.5",
+    "@types/sinon": "^22.0.0",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-header": "^3.1.1",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-jsdoc": "^64.5.4",
+    "eslint-plugin-unicorn": "^73.0.0",
+    "husky": "^9.1.7",
+    "lerna": "^10.1.1",
+    "lint-staged": "^17.6.0",
+    "minimatch": "^10.2.6",
+    "nock": "^14.0.15",
+    "oclif": "^4.23.0",
+    "prettier": "^3.9.10",
+    "sinon": "^22.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2",
+    "wireit": "^0.14.13"
+  }
+}

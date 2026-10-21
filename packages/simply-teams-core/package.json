@@ -1,0 +1,130 @@
+{
+  "name": "@simplysf/simply-teams-core",
+  "description": "Configuration, Microsoft Graph client, and shared logic for working with Microsoft Teams",
+  "version": "0.0.0",
+  "author": "@ClayChipps",
+  "homepage": "https://github.com/SimplySF/simply-teams",
+  "bugs": "https://github.com/SimplySF/simply-teams/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SimplySF/simply-teams",
+    "directory": "packages/simply-teams-core"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "/lib"
+  ],
+  "keywords": [
+    "microsoft-teams",
+    "teams",
+    "microsoft-graph",
+    "simply"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./testing": {
+      "types": "./lib/testing.d.ts",
+      "default": "./lib/testing.js"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
+    "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "wireit",
+    "compile": "wireit",
+    "fix-license": "eslint src test --fix --rule \"header/header: [2]\"",
+    "format": "wireit",
+    "lint": "wireit",
+    "test": "wireit",
+    "test:coverage": "vitest run --coverage --project simply-teams-core",
+    "test:only": "wireit",
+    "test:watch": "vitest watch --project simply-teams-core"
+  },
+  "wireit": {
+    "build": {
+      "dependencies": [
+        "compile",
+        "lint"
+      ]
+    },
+    "compile": {
+      "command": "tsc -p . --pretty --incremental",
+      "files": [
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json"
+      ],
+      "output": [
+        "lib/**",
+        "*.tsbuildinfo"
+      ],
+      "clean": "if-file-deleted"
+    },
+    "format": {
+      "command": "prettier --write \"+(src|test)/**/*.+(ts|js|json)\"",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        ".prettier*"
+      ],
+      "output": []
+    },
+    "lint": {
+      "command": "eslint src test --color --cache --cache-location .eslintcache",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "**/.eslint*",
+        "**/tsconfig.json",
+        "../../eslint.config.mjs",
+        "../../tsconfig.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "dependencies": [
+        "test:compile",
+        "test:only",
+        "lint"
+      ]
+    },
+    "test:compile": {
+      "command": "tsc -p \"./test\" --pretty",
+      "files": [
+        "test/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json"
+      ],
+      "output": []
+    },
+    "test:only": {
+      "command": "vitest run --project simply-teams-core",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "files": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "../../tsconfig.json",
+        "vitest.config.ts"
+      ],
+      "output": []
+    }
+  }
+}
