@@ -15,8 +15,17 @@
  */
 
 import type { TeamsCloud, TeamsConfig } from './config.js';
+import { AuthError } from './errors.js';
 import type { GraphClient } from './graph-client.js';
-import { BASE_SCOPES, missingScopes, shortScope, type TokenProvider, type TokenSource } from './token.js';
+import {
+  ADMIN_CONSENT_SCOPES,
+  BASE_SCOPES,
+  missingScopes,
+  shortScope,
+  type TokenProvider,
+  type TokenSource,
+  USER_CONSENT_SCOPES,
+} from './token.js';
 
 /**
  * What `teams auth status` and `teams auth login` report. Everything about the token except the
@@ -59,4 +68,38 @@ export async function authStatus(config: TeamsConfig, tokens: TokenProvider, gra
     scopes,
     missingScopes: missingScopes(scopes),
   };
+}
+
+/** What `auth login` reports: the status, plus where an administrator can grant what is missing. */
+export interface SignInResult extends AuthStatus {
+  /** Present only when an admin-only scope is missing and the app and tenant are both known. */
+  readonly adminConsentUrl?: string;
+}
+
+/** The tenant-wide admin-consent page for this app registration, or nothing if it cannot be named. */
+export function adminConsentUrl(config: TeamsConfig, tenantId: string | undefined): string | undefined {
+  if (config.clientId === undefined || tenantId === undefined || tenantId === '') return undefined;
+  // A multi-tenant alias would send the administrator to their own home tenant, not this one.
+  if (tenantId === 'organizations' || tenantId === 'common') return undefined;
+  return `${config.endpoints.loginUrl}/${encodeURIComponent(tenantId)}/adminconsent?client_id=${encodeURIComponent(config.clientId)}`;
+}
+
+/**
+ * Signs in in two steps (design 0003): interactively for the scopes a user can grant, then
+ * silently for the admin-only ones. A missing admin consent is reported, not fatal, so the
+ * commands that never needed an administrator work from the first login.
+ */
+export async function signIn(config: TeamsConfig, tokens: TokenProvider, graph: GraphClient): Promise<SignInResult> {
+  await tokens.getToken({ scopes: USER_CONSENT_SCOPES });
+  try {
+    await tokens.getToken({ scopes: ADMIN_CONSENT_SCOPES, silentOnly: true });
+  } catch (error) {
+    // A prompt here could only say "Need admin approval"; the status below reports the gap.
+    if (!(error instanceof AuthError)) throw error;
+  }
+  const status = await authStatus(config, tokens, graph);
+  const lacksAdmin = ADMIN_CONSENT_SCOPES.some((scope) => status.missingScopes.includes(scope));
+  const url =
+    lacksAdmin && status.source === 'broker' ? adminConsentUrl(config, status.tenantId ?? config.tenantId) : undefined;
+  return url === undefined ? status : { ...status, adminConsentUrl: url };
 }

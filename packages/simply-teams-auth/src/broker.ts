@@ -145,7 +145,7 @@ export class BrokerTokenProvider implements TokenProvider {
       result = await client.acquireTokenInteractive({ scopes, prompt: 'none', openBrowser: refuseBrowser });
     } catch (error) {
       if (!NEEDS_USER.test(describe(error))) throw new AuthError(`Sign-in failed: ${describe(error)}`, 401);
-      if (!this.config.interactive) {
+      if (!this.config.interactive || request.silentOnly === true) {
         throw new AuthError(`Sign-in needs you to confirm it once (${describe(error)}). ${LOGIN_HINT}`, 401);
       }
       // No prompt value: the broker signs in silently if it can and shows its account picker

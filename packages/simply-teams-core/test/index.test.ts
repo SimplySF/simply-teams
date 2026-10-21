@@ -42,7 +42,9 @@ describe('@simplysf/simply-teams-core', () => {
         'loadEnvFile',
         'parseEnvFile',
         // tokens
+        'ADMIN_CONSENT_SCOPES',
         'BASE_SCOPES',
+        'USER_CONSENT_SCOPES',
         'READ_SCOPES',
         'describeStaticToken',
         'graphScopes',
@@ -84,7 +86,9 @@ describe('@simplysf/simply-teams-core', () => {
         'buildSearchQuery',
         'parseDate',
         // operations
+        'adminConsentUrl',
         'authStatus',
+        'signIn',
         'listChannelMessages',
         'listChannels',
         'listChatMessages',

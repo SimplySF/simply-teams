@@ -44,11 +44,13 @@ export {
   type TeamsConfig,
 } from './config.js';
 export {
+  ADMIN_CONSENT_SCOPES,
   BASE_SCOPES,
   describeStaticToken,
   graphScopes,
   missingScopes,
   READ_SCOPES,
+  USER_CONSENT_SCOPES,
   shortScope,
   staticTokenProvider,
   type AccessToken,
@@ -96,7 +98,7 @@ export {
 export { buildSearchQuery, parseDate, type SearchFilters } from './kql.js';
 
 // --- Operations: what each command does between parsing its input and rendering its result ---
-export { authStatus, type AuthStatus } from './auth-status.js';
+export { adminConsentUrl, authStatus, signIn, type AuthStatus, type SignInResult } from './auth-status.js';
 export {
   listChannelMessages,
   listChannels,

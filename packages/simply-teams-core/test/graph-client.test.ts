@@ -15,7 +15,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { authStatus } from '../src/auth-status.js';
+import { adminConsentUrl, authStatus, signIn } from '../src/auth-status.js';
+import { AuthError } from '../src/errors.js';
 import { resolveTeamsConfig, type TeamsConfig } from '../src/config.js';
 import { GraphClient } from '../src/graph-client.js';
 import { respondJson, startTestServer, type TestServer } from '../src/testing.js';
@@ -127,5 +128,60 @@ describe('authStatus', () => {
     await authStatus(config, tokens, client(tokens));
 
     expect(tokens.requests.map((request) => request.scopes)).toStrictEqual([['User.Read'], ['User.Read']]);
+  });
+});
+
+describe('signIn', () => {
+  const ALL = ['User.Read', 'User.ReadBasic.All', 'Chat.Read', 'Team.ReadBasic.All', 'Channel.ReadBasic.All'];
+
+  /** A provider whose token holds `granted`, and which refuses any request for a scope it lacks. */
+  function consented(granted: readonly string[], tenantId = 'tid'): TokenProvider & { requests: TokenRequest[] } {
+    const requests: TokenRequest[] = [];
+    return {
+      requests,
+      getToken: (request = {}) => {
+        requests.push(request);
+        const missing = (request.scopes ?? []).filter((scope) => !granted.includes(scope));
+        if (missing.length > 0) return Promise.reject(new AuthError(`interaction_required: ${missing.join(' ')}`, 401));
+        return Promise.resolve({ token: 't', source: 'broker', tenantId, scopes: [...granted] });
+      },
+    };
+  }
+
+  beforeEach(() => {
+    server.route('/v1.0/me', (_req, res) => respondJson(res, 200, { id: 'u1', userPrincipalName: 'ada@contoso.com' }));
+  });
+
+  it('asks for the user scopes, then the admin scope silently, and links the admin-consent page when it is missing', async () => {
+    const tokens = consented(ALL);
+
+    const result = await signIn(config, tokens, client(tokens));
+
+    expect(tokens.requests.slice(0, 2)).toStrictEqual([
+      { scopes: ALL },
+      { scopes: ['ChannelMessage.Read.All'], silentOnly: true },
+    ]);
+    expect(result.missingScopes).toStrictEqual(['ChannelMessage.Read.All']);
+    expect(result.adminConsentUrl).toBe(
+      `https://login.microsoftonline.com/tid/adminconsent?client_id=${config.clientId ?? ''}`,
+    );
+  });
+
+  it('offers no link once everything is granted', async () => {
+    const tokens = consented([...ALL, 'ChannelMessage.Read.All']);
+    const result = await signIn(config, tokens, client(tokens));
+    expect(result.missingScopes).toStrictEqual([]);
+    expect(result.adminConsentUrl).toBeUndefined();
+  });
+
+  it('still fails when the user scopes themselves cannot be granted', async () => {
+    const tokens = consented(['User.Read']);
+    await expect(signIn(config, tokens, client(tokens))).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('builds no link without a concrete tenant', () => {
+    expect(adminConsentUrl(config, 'organizations')).toBeUndefined();
+    expect(adminConsentUrl(config, undefined)).toBeUndefined();
+    expect(adminConsentUrl({ ...config, clientId: undefined }, 'tid')).toBeUndefined();
   });
 });
