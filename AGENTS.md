@@ -13,7 +13,10 @@ Use the smallest relevant topic document rather than loading the whole directory
   why there are four packages, how a token is acquired (the OS broker, silently, with
   `TEAMS_ACCESS_TOKEN` as the escape hatch), scopes and admin consent, the Graph transport, why the
   MCP server never prompts, and the alternatives rejected for sign-in.
-- [Read commands](docs/design/0002-read-commands.md) (Draft): message search, view with context,
+- [Signing in before admin consent](docs/design/0003-consent-without-admin.md): why `auth login`
+  asks for the user-grantable scopes interactively and the admin-only one silently, and the
+  admin-consent link it prints.
+- [Read commands](docs/design/0002-read-commands.md): message search, view with context,
   chats, teams and channels; the normalized message shape; Teams links as references.
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command

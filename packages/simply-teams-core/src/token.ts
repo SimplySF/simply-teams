@@ -42,6 +42,11 @@ export interface TokenRequest {
    * every scope the user has consented to, whichever were asked for.
    */
   readonly scopes?: readonly string[];
+  /**
+   * Never prompt for this request, even where prompting is otherwise allowed. `auth login` uses
+   * it for the admin-only scope, where a prompt could only show "Need admin approval" (0003).
+   */
+  readonly silentOnly?: boolean;
 }
 
 /** What a call that names no scopes asks for: enough to read the signed-in user, which anyone can consent to. */
@@ -60,19 +65,25 @@ export interface TokenProvider {
 }
 
 /**
- * The delegated scopes the read commands need between them (design 0001, Scopes). `auth login`
- * asks for all of them, so consent happens at one moment rather than one command at a time.
- * `ChannelMessage.Read.All` needs admin consent, and Graph refuses `chatMessage` search entirely
- * without it, even for chats.
+ * The read scopes a user can grant for themselves. Checked against Graph's service principal on
+ * 2026-10-21 (`oauth2PermissionScopes[].type === 'User'`; design 0003).
  */
-export const READ_SCOPES = [
+export const USER_CONSENT_SCOPES = [
   'User.Read',
   'User.ReadBasic.All',
   'Chat.Read',
   'Team.ReadBasic.All',
   'Channel.ReadBasic.All',
-  'ChannelMessage.Read.All',
 ] as const;
+
+/**
+ * The read scopes only a tenant administrator can grant. Graph refuses `chatMessage` search
+ * entirely without `ChannelMessage.Read.All`, even for chats.
+ */
+export const ADMIN_CONSENT_SCOPES = ['ChannelMessage.Read.All'] as const;
+
+/** Every delegated scope the read commands need between them (design 0001, Scopes). */
+export const READ_SCOPES = [...USER_CONSENT_SCOPES, ...ADMIN_CONSENT_SCOPES] as const;
 
 /**
  * Broader grants that cover a read scope, so a token holding the wider one is not reported

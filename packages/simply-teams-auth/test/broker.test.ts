@@ -142,6 +142,17 @@ describe('BrokerTokenProvider', () => {
     expect(client.calls).toHaveLength(1);
   });
 
+  it('never prompts for a silent-only request, even where prompting is allowed', async () => {
+    const client = fakeClient(msalError('interaction_required', 'consent_required'), result());
+
+    const error = await provider(client, config({}, true))
+      .getToken({ scopes: ['ChannelMessage.Read.All'], silentOnly: true })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AuthError);
+    expect(client.calls.map((call) => call.prompt)).toStrictEqual(['none']);
+  });
+
   it('reports any other broker failure as an AuthError, first line only', async () => {
     const client = fakeClient(msalError('network_error', 'The network is down\nstack and noise'));
 

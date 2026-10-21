@@ -85,8 +85,10 @@ the `TEAMS_ACCESS_TOKEN` escape hatch are in the
 ## Documentation
 
 - [Command reference](packages/simply-teams/README.md): every command, flag, and example
-- [Credentials guide](packages/simply-teams/docs/guides/credentials.md): app registration, scopes,
-  and how sign-in resolves
+- [Registering the app](packages/simply-teams/docs/guides/app-registration.md): the one-time Entra
+  setup a tenant needs before anyone can sign in
+- [Credentials guide](packages/simply-teams/docs/guides/credentials.md): settings, scopes, and how
+  sign-in resolves
 - [MCP server](packages/simply-teams-mcp/README.md): the tool catalogue and client setup
 - [Design documents](docs/design/README.md): why things are the way they are
 - [Contributing](CONTRIBUTING.md): setup, checks, and the pull-request checklist

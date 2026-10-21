@@ -71,8 +71,9 @@ simply teams auth status   # who you are, and which scopes are still missing
 silently. If the broker needs you, the command fails with exit code 3 and tells you to run
 `auth login`.
 
-Message search needs `ChannelMessage.Read.All`, which only a tenant administrator can consent to.
-`auth status` tells you whether it is missing. The
+A tenant needs an app registration first: see [Registering the app](docs/guides/app-registration.md).
+Message search needs `ChannelMessage.Read.All`, which only a tenant administrator can consent to;
+`auth login` still succeeds without it and prints the link an administrator can use. The
 [credentials guide](docs/guides/credentials.md) covers registering the app, the full scope list,
 and `TEAMS_ACCESS_TOKEN` for machines without a broker.
 
@@ -139,6 +140,10 @@ DESCRIPTION
 
   Nothing is stored by this CLI: the broker keeps the session, so every later command and the MCP server sign in
   silently. Run this again only when one of them says to.
+
+  ChannelMessage.Read.All, which message search and the channel commands need, can only be granted by a tenant
+  administrator. Login does not wait for it: the chat, team, and channel list commands work straight away, and login
+  prints the link an administrator can use to grant it.
 
 EXAMPLES
   $ simply teams auth login

@@ -32,23 +32,9 @@ file, and an unreadable file is an error rather than silently skipped.
 
 ## Registering the app
 
-Ask whoever administers your tenant's Entra ID for an app registration, or create one if you are
-allowed to:
-
-1. **Create a registration.** In the Entra admin center, go to **App registrations › New
-   registration**. "Accounts in this organizational directory only" is enough for one tenant.
-2. **Add the broker's redirect URI.** Under **Authentication › Add a platform › Mobile and desktop
-   applications**, add:
-
-   ```
-   ms-appx-web://Microsoft.AAD.BrokerPlugin/<client-id>
-   ```
-
-   Use the registration's own application (client) ID in place of `<client-id>`. Without it, the
-   broker refuses to sign in for the app. The CLI is a public client; there is no client secret.
-
-3. **Add the delegated Microsoft Graph permissions** below under **API permissions**.
-4. **Set `TEAMS_CLIENT_ID`** to the registration's application (client) ID.
+A tenant needs one Entra app registration for simply-teams, created once. [Registering the app](app-registration.md)
+has the exact steps: the broker redirect URI, the six delegated permissions with their IDs, and
+the admin-consent link. Then set `TEAMS_CLIENT_ID` to the registration's application (client) ID.
 
 ### Scopes
 
