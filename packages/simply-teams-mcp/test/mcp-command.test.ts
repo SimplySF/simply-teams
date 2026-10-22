@@ -77,9 +77,9 @@ describe('teams mcp', () => {
     const all = selectTools(true);
     expect(stderr.join('')).toContain(`${all.length} tool(s) would be registered`);
     expect(stderr.join('')).toMatch(/writes allowed/);
-    // Nothing writes yet (design 0001), so the flag changes only the label. When the first write
-    // tool lands, this becomes "the default really is smaller", as in the sibling servers.
-    expect(all).toStrictEqual(selectTools(false));
+    // The default really is smaller: the write tools (design 0004) appear only with the flag.
+    expect(all.length).toBeGreaterThan(selectTools(false).length);
+    expect(stderr.join('')).toContain('teams_channel_post');
   });
 
   it('says whether it is read-only, so a listing is never ambiguous', async () => {

@@ -37,6 +37,7 @@ refactors that keep the public surface identical (though a short doc is welcome 
 | 0001 | [Teams client core, ambient sign-in, and package layout](0001-teams-client-core-and-auth.md) | In progress |
 | 0002 | [Read commands: search, messages, chats, and channels](0002-read-commands.md)                | Implemented |
 | 0003 | [Signing in before an administrator has consented](0003-consent-without-admin.md)            | Implemented |
+| 0004 | [Writes: posting, replying, and sending in a chat](0004-writes.md)                           | Implemented |
 
 ## Template
 

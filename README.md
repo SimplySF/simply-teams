@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Simply Teams is a command-line interface built by [SimplySF](https://github.com/SimplySF) for
-reading Microsoft Teams, and an MCP server that gives an AI agent the same capabilities. The goal is
+reading and posting in Microsoft Teams, and an MCP server that gives an AI agent the same capabilities. The goal is
 to let an agent working in a codebase find the context behind a change: the chat where a requirement
 was clarified, the thread where an approach was agreed.
 
@@ -11,9 +11,10 @@ Sign-in is seamless. It uses the account the operating system is already signed 
 its identity broker (Web Account Manager on Windows), so on an Entra ID–joined machine there is
 normally no prompt at all, and this tool stores no credentials of its own.
 
-**Status:** early. Today the CLI signs in and reports the session (`teams auth login`,
-`teams auth status`), and the MCP server exposes the matching read tool. Message search and reading
-chats, channels, and threads are designed next (see [docs/design](docs/design/README.md)).
+**Status:** early and unreleased. The CLI signs in, searches messages, and reads chats, channels
+and threads; it can also post in a channel, reply in a thread, and send in a chat. The MCP server
+exposes the same commands, with the writes only under `--allow-writes`. See
+[docs/design](docs/design/README.md).
 
 This repo is a Lerna/pnpm monorepo, following the same conventions as SimplySF's
 [`simply-gitlab`](https://github.com/SimplySF/simply-gitlab) and
@@ -71,8 +72,11 @@ the `TEAMS_ACCESS_TOKEN` escape hatch are in the
 
 ## Safety
 
-- **Read-only.** Nothing in this release changes anything in Teams. The MCP server registers only
-  read tools, and `TEAMS_READ_ONLY=1` is already honoured for when writes arrive.
+- **Read-only unless you opt in.** Posting needs the send scopes, which only
+  `teams auth login --allow-writes` asks for. The MCP server registers the write tools only with
+  `--allow-writes`, `TEAMS_READ_ONLY=1` refuses every write, and `--dry-run` shows a post before it is
+  sent. A post appears exactly as if you had typed it. See the
+  [write-safety guide](packages/simply-teams/docs/guides/write-safety.md).
 - **No stored credentials.** The broker keeps the session, bound to the device. A
   `TEAMS_ACCESS_TOKEN`, if you supply one, is read from the environment only (there is no flag), so
   it never sits in shell history, and it is redacted from every error message and response body.
@@ -87,6 +91,7 @@ the `TEAMS_ACCESS_TOKEN` escape hatch are in the
 - [Command reference](packages/simply-teams/README.md): every command, flag, and example
 - [Registering the app](packages/simply-teams/docs/guides/app-registration.md): the one-time Entra
   setup a tenant needs before anyone can sign in
+- [Write safety](packages/simply-teams/docs/guides/write-safety.md): what posting does, the layers in front of it, and why a failed post is not retried
 - [Credentials guide](packages/simply-teams/docs/guides/credentials.md): settings, scopes, and how
   sign-in resolves
 - [MCP server](packages/simply-teams-mcp/README.md): the tool catalogue and client setup

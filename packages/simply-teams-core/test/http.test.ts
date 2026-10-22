@@ -192,3 +192,89 @@ describe('HttpTransport', () => {
     expect(server.requests).toHaveLength(1);
   });
 });
+
+describe('writes (design 0004)', () => {
+  /*
+   * A gateway can return a 5xx, or drop the connection, after Graph has already posted the
+   * message. Graph messages have no idempotency key, so a retry would post it twice, in front of
+   * everyone in the channel. A write retries only what proves Graph did not act.
+   */
+  it('sends a write once on a 5xx, and says the message may have been posted', async () => {
+    server.route('/v1.0/teams/t/channels/c/messages', (_req, res) => {
+      respondJson(res, 502, { error: { code: 'BadGateway', message: 'upstream' } }, { 'retry-after': '0' });
+    });
+
+    const error = await transport()
+      .json({ method: 'POST', path: '/teams/t/channels/c/messages', body: {}, mutating: true })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).message).toContain('may have been posted');
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('still retries a write on a 429, which Graph refuses before acting', async () => {
+    let calls = 0;
+    server.route('/v1.0/chats/x/messages', (_req, res) => {
+      calls += 1;
+      if (calls === 1) respondJson(res, 429, { error: { code: 'TooManyRequests' } }, { 'retry-after': '0' });
+      else respondJson(res, 201, { id: '1' });
+    });
+
+    await expect(
+      transport().json({ method: 'POST', path: '/chats/x/messages', body: {}, mutating: true }),
+    ).resolves.toEqual({ id: '1' });
+    expect(calls).toBe(2);
+  });
+
+  it('does not retry a write when the connection drops mid-request', async () => {
+    server.route('/v1.0/chats/x/messages', (_req, res) => {
+      res.socket?.destroy();
+    });
+
+    const error = await transport()
+      .json({ method: 'POST', path: '/chats/x/messages', body: {}, mutating: true })
+      .catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toContain('may have been posted');
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('says a write that timed out may have been posted', async () => {
+    server.route('/v1.0/chats/x/messages', () => {
+      // Never respond.
+    });
+
+    const error = await transport({ timeoutMs: 100, maxAttempts: 1 })
+      .json({ method: 'POST', path: '/chats/x/messages', body: {}, mutating: true })
+      .catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toContain('may have been posted');
+  });
+
+  it('refreshes the token once on a 401 and sends the write, since Graph acted on nothing', async () => {
+    let calls = 0;
+    server.route('/v1.0/chats/x/messages', (_req, res) => {
+      calls += 1;
+      if (calls === 1) respondJson(res, 401, { error: { code: 'InvalidAuthenticationToken' } });
+      else respondJson(res, 201, { id: '2' });
+    });
+
+    await expect(
+      transport().json({ method: 'POST', path: '/chats/x/messages', body: {}, mutating: true }),
+    ).resolves.toEqual({ id: '2' });
+    expect(calls).toBe(2);
+  });
+
+  it('keeps retrying a 5xx on a POST that reads, such as search', async () => {
+    let calls = 0;
+    server.route('/v1.0/search/query', (_req, res) => {
+      calls += 1;
+      if (calls === 1) respondJson(res, 503, {}, { 'retry-after': '0' });
+      else respondJson(res, 200, { value: [] });
+    });
+
+    await expect(transport().json({ method: 'POST', path: '/search/query', body: {} })).resolves.toEqual({ value: [] });
+    expect(calls).toBe(2);
+  });
+});

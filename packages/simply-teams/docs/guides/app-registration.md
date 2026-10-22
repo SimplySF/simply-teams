@@ -72,6 +72,22 @@ were read from Microsoft Graph's service principal on 2026-10-21:
 ]
 ```
 
+### For writing: a second registration
+
+The write commands (`channel post`, `message reply`, `chat send`) need two more delegated
+permissions, both of which a user can grant:
+
+| Permission            | Who can consent | Needed by                       | ID                                     |
+| --------------------- | --------------- | ------------------------------- | -------------------------------------- |
+| `ChannelMessage.Send` | each user       | `channel post`, `message reply` | `ebf0f66e-9fb1-49e4-a278-222f76911cf4` |
+| `ChatMessage.Send`    | each user       | `chat send`                     | `116b7235-7cc6-461e-b163-8e55691d839e` |
+
+Put them on a **separate** registration, such as `simply-teams-write`, rather than on this one.
+Every scope a registration holds lands in every token it issues, so adding them here would let the
+agent's everyday, read-only server post too. With two registrations, the read-only one is what
+binds: point the everyday MCP server at it, and use the write registration's client ID only where
+posting is meant to happen. Then sign in to it with `simply teams auth login --allow-writes`.
+
 ## 4. Grant admin consent (an administrator)
 
 `ChannelMessage.Read.All` needs a tenant administrator's consent. **Without it, Graph refuses all

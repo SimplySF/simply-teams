@@ -22,10 +22,15 @@ import {
   listChannelMessages,
   listChatMessages,
   listChats,
+  planChannelPost,
+  planChannelReply,
+  planChatSend,
   resolveChannel,
   searchMessages,
+  sendPlanned,
   viewMessage,
 } from '../src/operations.js';
+import { parseRef } from '../src/refs.js';
 import { respondJson, startTestServer, type TestServer } from '../src/testing.js';
 import type { TokenProvider, TokenRequest } from '../src/token.js';
 
@@ -267,5 +272,68 @@ describe('channels by name', () => {
       { limit: 10, replies: true },
     );
     expect(threaded.items.map((item) => item.id)).toStrictEqual(['10', '11', '20']);
+  });
+});
+
+describe('writes (design 0004)', () => {
+  const base = `/v1.0/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages`;
+
+  it('posts to a channel, naming ChannelMessage.Send, and returns the stored message in the read shape', async () => {
+    let sent: unknown;
+    server.route(base, (req, res, body) => {
+      sent = JSON.parse(body) as unknown;
+      respondJson(res, 201, message(7, { chatId: undefined, channelIdentity: { teamId: TEAM, channelId: CHANNEL } }));
+    });
+    const client = graph();
+    const planned = await planChannelPost(client, parseRef(`${TEAM}/${CHANNEL}`, ['channel']), { text: 'hi <all>' });
+    const posted = await sendPlanned(client, planned);
+
+    expect(sent).toStrictEqual({ body: { contentType: 'html', content: 'hi &lt;all&gt;' } });
+    expect(requested.at(-1)?.scopes).toStrictEqual(['ChannelMessage.Send']);
+    expect(posted.ref).toBe(`${TEAM}/${CHANNEL}/7`);
+    expect(posted.text).toBe('message 7');
+  });
+
+  it('replies to the thread a reply is in, since Teams threads are one level deep', async () => {
+    const planned = await planChannelReply(graph(), parseRef(`${TEAM}/${CHANNEL}/100/105`, ['channelMessage']), {
+      text: 'agreed',
+    });
+    expect(planned.path).toBe(`/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages/100/replies`);
+    expect(planned.scopes).toStrictEqual(['ChannelMessage.Send']);
+  });
+
+  it('plans a write without sending anything, so a dry run needs no write scope', async () => {
+    const planned = await planChatSend(graph(), CHAT, { text: 'draft' });
+    expect(planned).toStrictEqual({
+      method: 'POST',
+      path: `/chats/${encodeURIComponent(CHAT)}/messages`,
+      body: { body: { contentType: 'html', content: 'draft' } },
+      scopes: ['ChatMessage.Send'],
+    });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('resolves a mention with User.ReadBasic.All before posting, and refuses an unknown one', async () => {
+    server.route('/v1.0/users/ada%40example.test', (_req, res) => {
+      respondJson(res, 200, { id: 'u-ada', displayName: 'Ada' });
+    });
+    server.route('/v1.0/users/nobody%40example.test', (_req, res) => {
+      respondJson(res, 404, { error: { code: 'Request_ResourceNotFound' } });
+    });
+
+    const planned = await planChatSend(graph(), CHAT, { text: 'see this', mentions: ['ada@example.test'] });
+    expect(planned.body.body.content).toBe('<at id="0">Ada</at> see this');
+    expect(requested.at(-1)?.scopes).toStrictEqual(['User.ReadBasic.All']);
+
+    await expect(planChatSend(graph(), CHAT, { text: 'x', mentions: ['nobody@example.test'] })).rejects.toThrow(
+      /No user found for the mention "nobody@example.test"/,
+    );
+  });
+
+  it('refuses an empty message before making any request', async () => {
+    await expect(planChatSend(graph(), CHAT, { text: '', mentions: ['ada@example.test'] })).rejects.toThrow(
+      ConfigError,
+    );
+    expect(server.requests).toHaveLength(0);
   });
 });

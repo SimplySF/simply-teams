@@ -18,6 +18,8 @@ Use the smallest relevant topic document rather than loading the whole directory
   admin-consent link it prints.
 - [Read commands](docs/design/0002-read-commands.md): message search, view with context,
   chats, teams and channels; the normalized message shape; Teams links as references.
+- [Writes](docs/design/0004-writes.md): channel post, thread reply and chat send; the send scopes
+  kept out of `READ_SCOPES`; why writes are sent once and never retried after a 5xx; dry runs.
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command
 reference. Update command metadata first, then regenerate it as described in `CONTRIBUTING.md`.

@@ -4,7 +4,7 @@
     "command": "teams:auth:login",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "json", "tenant"],
+    "flags": ["allow-writes", "client-id", "cloud", "env-file", "json", "tenant"],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -33,6 +33,14 @@
   },
   {
     "alias": [],
+    "command": "teams:channel:post",
+    "flagAliases": [],
+    "flagChars": ["e"],
+    "flags": ["client-id", "cloud", "dry-run", "env-file", "html", "json", "mention", "tenant", "text"],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
     "command": "teams:chat:list",
     "flagAliases": [],
     "flagChars": ["e"],
@@ -45,6 +53,22 @@
     "flagAliases": [],
     "flagChars": ["e"],
     "flags": ["client-id", "cloud", "env-file", "include-events", "json", "limit", "since", "tenant"],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
+    "command": "teams:chat:send",
+    "flagAliases": [],
+    "flagChars": ["e"],
+    "flags": ["client-id", "cloud", "dry-run", "env-file", "html", "json", "mention", "tenant", "text"],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
+    "command": "teams:message:reply",
+    "flagAliases": [],
+    "flagChars": ["e"],
+    "flags": ["client-id", "cloud", "dry-run", "env-file", "html", "json", "mention", "tenant", "text"],
     "plugin": "@simplysf/simply-teams"
   },
   {

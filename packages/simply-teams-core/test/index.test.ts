@@ -46,6 +46,7 @@ describe('@simplysf/simply-teams-core', () => {
         'BASE_SCOPES',
         'USER_CONSENT_SCOPES',
         'READ_SCOPES',
+        'WRITE_SCOPES',
         'describeStaticToken',
         'graphScopes',
         'missingScopes',
@@ -85,6 +86,10 @@ describe('@simplysf/simply-teams-core', () => {
         'renderSummary',
         'buildSearchQuery',
         'parseDate',
+        // message bodies for writes
+        'buildMessageBody',
+        'escapeHtml',
+        'textToHtml',
         // operations
         'adminConsentUrl',
         'authStatus',
@@ -100,6 +105,11 @@ describe('@simplysf/simply-teams-core', () => {
         'SCOPES',
         'searchMessages',
         'viewMessage',
+        'planChannelPost',
+        'planChannelReply',
+        'planChatSend',
+        'resolveMentions',
+        'sendPlanned',
       ].sort(),
     );
   });

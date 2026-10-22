@@ -61,6 +61,52 @@ describe('selectTools', () => {
   it('registers only read tools by default', () => {
     expect(selectTools(false).every((tool) => tool.kind === 'read')).toBe(true);
   });
+
+  it('adds the write tools only with --allow-writes', () => {
+    const writes = selectTools(true).filter((tool) => tool.kind === 'write');
+    expect(writes.map((tool) => tool.name)).toStrictEqual([
+      'teams_channel_post',
+      'teams_message_reply',
+      'teams_chat_send',
+    ]);
+  });
+});
+
+describe('write tools (design 0004)', () => {
+  const chat = '19:chat@thread.v2';
+  const path = `/v1.0/chats/${encodeURIComponent(chat)}/messages`;
+
+  it('refuses a write under TEAMS_READ_ONLY before any request', async () => {
+    const result = await invokeTool(spec('teams_chat_send'), context({ TEAMS_READ_ONLY: '1' }), { chat, text: 'x' });
+    expect(result.isError).toBe(true);
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringMatching(/TEAMS_READ_ONLY/) });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('returns the planned request under dryRun and sends nothing', async () => {
+    const result = await invokeTool(spec('teams_chat_send'), context(), { chat, text: 'draft', dryRun: true });
+    expect(payload(result)).toMatchObject({ method: 'POST', body: { body: { content: 'draft' } } });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('sends through the same core operation as the CLI and returns the stored message', async () => {
+    server.route(path, (_req, res) => {
+      respondJson(res, 201, {
+        id: '9',
+        messageType: 'message',
+        chatId: chat,
+        from: { user: { id: 'u', displayName: 'Ada' } },
+        body: { contentType: 'html', content: '<p>sent</p>' },
+      });
+    });
+    const result = await invokeTool(spec('teams_chat_send'), context(), { chat, text: 'sent' });
+    expect(payload(result)).toMatchObject({ ref: `${chat}/9`, text: 'sent' });
+  });
+
+  it('turns a chat message given to reply into a config result', async () => {
+    const result = await invokeTool(spec('teams_message_reply'), context(), { message: `${chat}/42`, text: 'x' });
+    expect(payload(result)).toMatchObject({ code: 'config' });
+  });
 });
 
 describe('invokeTool', () => {
