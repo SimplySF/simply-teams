@@ -226,10 +226,13 @@ List the channels in a team.
 ```
 USAGE
   $ simply teams channel list TEAM [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod]
+    global|usgov-high|dod] [--clean]
 
 ARGUMENTS
   TEAM  A team name, ref, or link.
+
+FLAGS
+  --clean  Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server does.
 
 CONNECTION FLAGS
   -e, --env-file=<value>   Path to a .env file holding connection settings.
@@ -267,12 +270,14 @@ Read the recent posts in a channel, oldest first.
 ```
 USAGE
   $ simply teams channel messages CHANNEL [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--since <value>] [--replies] [--include-events] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--since <value>] [--replies] [--include-events] [--limit <value>]
 
 ARGUMENTS
   CHANNEL  A channel link, a channel ref, or "Team/Channel" by name.
 
 FLAGS
+  --clean           Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                    does.
   --include-events  Also show system events.
   --limit=<value>   [default: 25] Maximum number of posts to return across all pages.
   --replies         Also fetch each post's replies.
@@ -374,9 +379,11 @@ List your chats, most recently active first.
 ```
 USAGE
   $ simply teams chat list [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--limit <value>]
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --limit=<value>  [default: 20] Maximum number of chats to return across all pages.
 
 CONNECTION FLAGS
@@ -415,12 +422,14 @@ Read the recent messages in a chat, oldest first.
 ```
 USAGE
   $ simply teams chat messages CHAT [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--since <value>] [--include-events] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--since <value>] [--include-events] [--limit <value>]
 
 ARGUMENTS
   CHAT  A Teams chat link, or a chat ref.
 
 FLAGS
+  --clean           Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                    does.
   --include-events  Also show system events (calls, membership changes).
   --limit=<value>   [default: 50] Maximum number of messages to return across all pages.
   --since=<value>   Stop at messages older than this: YYYY-MM-DD, or relative like 7d.
@@ -569,12 +578,15 @@ Search the chat and channel messages you can see.
 ```
 USAGE
   $ simply teams message search [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit
+    <value>]
 
 ARGUMENTS
   [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --from=<value>   Only messages from this person: a name or email address.
   --limit=<value>  [default: 25] Maximum number of results to return across all pages.
   --mentions-me    Only messages that @mention you.
@@ -634,13 +646,15 @@ Show one message in full, optionally with the conversation around it.
 ```
 USAGE
   $ simply teams message view REF [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [-c <value>]
+    global|usgov-high|dod] [--clean] [-c <value>]
 
 ARGUMENTS
   REF  A Teams message link, or a message ref from a result.
 
 FLAGS
   -c, --context=<value>  How many messages to show on each side of this one.
+      --clean            Withhold messages that hold a secret and replace personal data with placeholders, as the MCP
+                         server does.
 
 CONNECTION FLAGS
   -e, --env-file=<value>   Path to a .env file holding connection settings.
@@ -686,9 +700,11 @@ List the teams you are a member of.
 ```
 USAGE
   $ simply teams team list [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--limit <value>]
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --limit=<value>  [default: 100] Maximum number of teams to return across all pages.
 
 CONNECTION FLAGS

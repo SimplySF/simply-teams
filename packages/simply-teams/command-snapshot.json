@@ -20,7 +20,7 @@
     "command": "teams:channel:list",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "json", "tenant"],
+    "flags": ["clean", "client-id", "cloud", "env-file", "json", "tenant"],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -28,7 +28,18 @@
     "command": "teams:channel:messages",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "include-events", "json", "limit", "replies", "since", "tenant"],
+    "flags": [
+      "clean",
+      "client-id",
+      "cloud",
+      "env-file",
+      "include-events",
+      "json",
+      "limit",
+      "replies",
+      "since",
+      "tenant"
+    ],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -44,7 +55,7 @@
     "command": "teams:chat:list",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "json", "limit", "tenant"],
+    "flags": ["clean", "client-id", "cloud", "env-file", "json", "limit", "tenant"],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -52,7 +63,7 @@
     "command": "teams:chat:messages",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "include-events", "json", "limit", "since", "tenant"],
+    "flags": ["clean", "client-id", "cloud", "env-file", "include-events", "json", "limit", "since", "tenant"],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -76,7 +87,19 @@
     "command": "teams:message:search",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "from", "json", "limit", "mentions-me", "since", "tenant", "until"],
+    "flags": [
+      "clean",
+      "client-id",
+      "cloud",
+      "env-file",
+      "from",
+      "json",
+      "limit",
+      "mentions-me",
+      "since",
+      "tenant",
+      "until"
+    ],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -84,7 +107,7 @@
     "command": "teams:message:view",
     "flagAliases": [],
     "flagChars": ["c", "e"],
-    "flags": ["client-id", "cloud", "context", "env-file", "json", "tenant"],
+    "flags": ["clean", "client-id", "cloud", "context", "env-file", "json", "tenant"],
     "plugin": "@simplysf/simply-teams"
   },
   {
@@ -92,7 +115,7 @@
     "command": "teams:team:list",
     "flagAliases": [],
     "flagChars": ["e"],
-    "flags": ["client-id", "cloud", "env-file", "json", "limit", "tenant"],
+    "flags": ["clean", "client-id", "cloud", "env-file", "json", "limit", "tenant"],
     "plugin": "@simplysf/simply-teams"
   }
 ]

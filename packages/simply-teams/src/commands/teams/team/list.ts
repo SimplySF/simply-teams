@@ -15,7 +15,7 @@
  */
 
 import { formatTable, type ListResult, listTeams, type TeamsTeam } from '@simplysf/simply-teams-core';
-import { limitFlag, TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { truncate } from '../../../shared/message-output.js';
 
 export default class TeamList extends TeamsCommand<typeof TeamList> {
@@ -26,11 +26,12 @@ export default class TeamList extends TeamsCommand<typeof TeamList> {
   public static override readonly examples = ['<%= config.bin %> <%= command.id %>'];
 
   public static override readonly flags = {
+    ...cleanFlag,
     ...limitFlag(100, 'teams'),
   };
 
   public async run(): Promise<ListResult<TeamsTeam>> {
-    const result = await listTeams(this.graph(), this.flags.limit);
+    const result = this.cleaned(await listTeams(this.graph(), this.flags.limit));
     this.logSafe(
       formatTable(result.items, [
         { header: 'Team', value: (team): unknown => team.name },

@@ -69,6 +69,12 @@ describe('@simplysf/simply-teams-core', () => {
         'redactSecrets',
         'sanitiseDeep',
         'secretValues',
+        // cleaning
+        'DETECTOR_TYPES',
+        'TeamsGuard',
+        'secretsIn',
+        'cleanResult',
+        'restoreInput',
         // rendering
         'formatKeyValue',
         'formatTable',

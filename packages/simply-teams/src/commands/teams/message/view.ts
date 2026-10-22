@@ -16,7 +16,7 @@
 
 import { Args, Flags } from '@oclif/core';
 import { MAX_CONTEXT, type MessageView, parseRef, viewMessage } from '@simplysf/simply-teams-core';
-import { TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderMessage, renderTranscript } from '../../../shared/message-output.js';
 
 export default class MessageViewCommand extends TeamsCommand<typeof MessageViewCommand> {
@@ -43,6 +43,7 @@ export default class MessageViewCommand extends TeamsCommand<typeof MessageViewC
   };
 
   public static override readonly flags = {
+    ...cleanFlag,
     context: Flags.integer({
       char: 'c',
       summary: 'How many messages to show on each side of this one.',
@@ -54,7 +55,7 @@ export default class MessageViewCommand extends TeamsCommand<typeof MessageViewC
 
   public async run(): Promise<MessageView> {
     const ref = parseRef(this.args.ref, ['chatMessage', 'channelMessage']);
-    const view = await viewMessage(this.graph(), ref, this.flags.context);
+    const view = this.cleaned(await viewMessage(this.graph(), ref, this.flags.context));
     for (const warning of view.warnings) this.warn(warning);
     this.logSafe(
       view.thread.length === 0 ? renderMessage(view.message) : renderTranscript(view.thread, view.message.id),

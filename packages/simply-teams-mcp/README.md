@@ -82,6 +82,17 @@ Give the everyday, read-only server a read-only app registration, and start a se
 `--allow-writes` and a write registration only where posting is meant
 ([design 0004](../../docs/design/0004-writes.md)).
 
+## What the agent sees
+
+Every result is cleaned before it is returned (design 0005). A message whose text holds a secret has
+its text replaced with `[withheld: contains a secret (AWS access key)]`, keeping its ref and author.
+Email addresses, phone numbers, social security numbers, card numbers and IBANs become placeholders
+such as `[EMAIL-1]`, the same placeholder for the same value for the life of the server. When the
+agent uses a placeholder in a reply or a search, the server puts the real value back before the
+request reaches Teams. Each result carries a `cleaned` summary of what was removed.
+
+`--no-clean` turns this off, for a person who wants the raw text in their own agent.
+
 ## What agents should know
 
 **Failures are results, not exceptions.** A failure comes back as an `isError` result whose text is

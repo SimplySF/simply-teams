@@ -82,6 +82,11 @@ the `TEAMS_ACCESS_TOKEN` escape hatch are in the
   it never sits in shell history, and it is redacted from every error message and response body.
 - **The MCP server never opens a sign-in window.** If the broker needs you, the tool says to run
   `simply teams auth login` in a terminal.
+- **What an agent sees is cleaned.** A message that holds a secret (a key, a token, a connection
+  string with a password) is withheld whole; email addresses, phone numbers and other personal data
+  are replaced with placeholders such as `[EMAIL-1]`, which the server puts back if the agent uses
+  them in a reply or a search. On by default in the MCP server, `--clean` in the CLI
+  ([design 0005](docs/design/0005-cleaning-before-the-agent.md)).
 - **Teams messages are untrusted text.** Anyone in a chat writes them. Control characters are
   stripped before anything is printed, and the MCP server tells the agent to treat message content as
   data, never as instructions.

@@ -208,6 +208,31 @@ retried: check before calling it again. The
 [write-safety guide](../../../simply-teams/docs/guides/write-safety.md) explains the layers, and why
 the server an agent uses every day should run on an app registration that can only read.
 
+## What the agent sees
+
+Results are cleaned before they are returned, so a credential or a phone number pasted into a chat
+does not travel into the agent's context, and from there to its model provider:
+
+| In a message                                                 | The agent sees                                                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| a secret: a key, a token, a private key, a password in a URL | `[withheld: contains a secret (AWS access key)]` in place of the whole text; the ref and author stay |
+| an email address, phone number, SSN, card number or IBAN     | a placeholder, `[EMAIL-1]`, the same one for the same value every time                               |
+| anything else                                                | the text as written                                                                                  |
+
+Placeholders work in the other direction too. A reply of "thanks [EMAIL-1]" reaches Teams with the
+real address, because the server restores every placeholder it issued before the request goes out,
+and the dry run the agent is shown is cleaned again. Each result ends with a `cleaned` summary:
+
+```json
+"cleaned": { "withheld": 1, "redacted": { "email address": 2 }, "summary": "Cleaned: 1 item withheld for holding a secret; 2 email addresses replaced with placeholders." }
+```
+
+`teams_auth_status` is not cleaned: it describes this session, not anyone's message. Start the
+server with `--no-clean` to turn cleaning off. The detectors are the ones
+[simply-confluence-explorer](https://github.com/SimplySF/simply-confluence-explorer) uses before it
+sends a page to an AI; [design 0005](../../../../docs/design/0005-cleaning-before-the-agent.md)
+records what was ported and why messages are withheld whole.
+
 ## Results and errors
 
 A successful call returns what the CLI prints with `--json`, verbatim. A failure returns an error

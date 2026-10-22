@@ -20,6 +20,10 @@ Use the smallest relevant topic document rather than loading the whole directory
   chats, teams and channels; the normalized message shape; Teams links as references.
 - [Writes](docs/design/0004-writes.md): channel post, thread reply and chat send; the send scopes
   kept out of `READ_SCOPES`; why writes are sent once and never retried after a 5xx; dry runs.
+- [Cleaning](docs/design/0005-cleaning-before-the-agent.md): the guard ported from
+  simply-confluence-explorer; a message holding a secret is withheld whole, personal data becomes
+  `[EMAIL-1]` placeholders that are restored when the agent writes; on by default in the MCP server,
+  `--clean` in the CLI.
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command
 reference. Update command metadata first, then regenerate it as described in `CONTRIBUTING.md`.
@@ -63,6 +67,11 @@ hand-write a reference page. A guide that no longer matches `--help` is worse th
 - **Each Graph call names the scopes it needs** (`scopes` on the call). The broker is asked for
   exactly those (incremental consent), so a scope that lacks admin consent breaks only the commands
   that need it. `auth status` asks for `User.Read` alone for that reason.
+
+- **The MCP server cleans every result before an agent sees it** (`invokeTool`, design 0005). The
+  guard is one `TeamsGuard` per server; its placeholder map must never be returned, logged or
+  written. New result shapes need their free-text fields named in `guard-results.ts`'s `FREE_TEXT`,
+  and their identifiers in `IDENTIFIERS`, or they are cleaned as plain strings.
 
 - **Anything Graph returned is untrusted text.** Teams messages, display names, and chat topics are
   written by anyone in the chat or the tenant. Print them through `logSafe`, never `this.log`. Error

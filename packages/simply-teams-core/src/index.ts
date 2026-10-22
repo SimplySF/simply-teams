@@ -78,6 +78,10 @@ export { stripControl, stripControlOneLine } from './text.js';
 export { assertWritesAllowed, isReadOnly, READ_ONLY_ENV } from './write-safety.js';
 export { collectSecrets, redactSecrets, sanitiseDeep, SECRET_ENV, secretValues } from './redaction.js';
 
+// --- Cleaning what an agent sees (design 0005) ---
+export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
+export { cleanResult, restoreInput, type GuardReport } from './guard-results.js';
+
 // --- Shared rendering ---
 export { formatKeyValue, formatTable, type Column, type Pair } from './output.js';
 export { decodeEntities, htmlToText, type AttachmentLabel } from './html-text.js';

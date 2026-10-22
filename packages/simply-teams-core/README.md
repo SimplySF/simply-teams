@@ -76,6 +76,11 @@ missing read and write scopes, never the token; the reads (`searchMessages`, `vi
 `sendPlanned` posts it and returns the stored message. `buildMessageBody` escapes text and links
 mentions.
 
+**Cleaning** (design 0005): `secretsIn`, `TeamsGuard` (placeholders for personal data, kept stable and
+restorable), `cleanResult` (withholds items holding a secret, placeholders the rest, leaves
+identifiers alone, and reports what it did) and `restoreInput`; `DETECTOR_TYPES` for the corpus
+test.
+
 **Rendering**: `formatTable`, `formatKeyValue`.
 
 **Testing**: `@simplysf/simply-teams-core/testing` exports `startTestServer` and `respondJson`, a
