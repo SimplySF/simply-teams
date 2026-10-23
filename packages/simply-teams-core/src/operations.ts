@@ -35,7 +35,7 @@ import {
   type MessageInput,
   validateMessageInput,
 } from './message-body.js';
-import type { Selector, TeamsRef } from './refs.js';
+import { parseRef, type Selector, type TeamsRef } from './refs.js';
 import { stripControlOneLine } from './text.js';
 
 /** The scopes each kind of read needs (design 0002, Commands). Each call asks for exactly these. */
@@ -485,7 +485,8 @@ async function findUser(graph: GraphClient, wanted: string): Promise<GraphUserRe
   try {
     return await graph.get<GraphUserRef>(`/users/${encode(wanted)}`, SCOPES.users, select);
   } catch (error) {
-    if (!(error instanceof HttpError && error.status === 404) || !wanted.includes('@')) throw error;
+    if (!(error instanceof HttpError && error.status === 404)) throw error;
+    if (!wanted.includes('@')) throw new ConfigError(`No user found for the mention "${wanted}".`);
   }
   const byMail = await graph.get<{ value?: readonly GraphUserRef[] }>('/users', SCOPES.users, {
     ...select,
@@ -528,6 +529,20 @@ async function plan(
   return { method: 'POST', path, body: buildMessageBody(input, mentions), scopes };
 }
 
+/**
+ * The thread a reply goes to, from whatever the caller pasted. A chat message is refused here,
+ * with the command to use instead: chats have no threads, so "reply" has no meaning in one.
+ */
+export function parseReplyRef(input: string): Extract<TeamsRef, { kind: 'channelMessage' }> {
+  const ref = parseRef(input, ['channelMessage', 'chatMessage']);
+  if (ref.kind === 'chatMessage') {
+    throw new ConfigError(
+      `That is a chat message, and chats have no threads. Send to the chat instead: teams chat send ${ref.chatId}`,
+    );
+  }
+  return ref;
+}
+
 /** A new post in a channel. */
 export async function planChannelPost(
   graph: GraphClient,
@@ -562,6 +577,17 @@ export async function planChatSend(graph: GraphClient, chatId: string, input: Wr
  * return. Sent once: a failure that could have followed a posted message is reported, not retried.
  */
 export async function sendPlanned(graph: GraphClient, planned: PlannedWrite): Promise<TeamsMessage> {
-  const raw = await graph.send<GraphChatMessage>(planned.path, planned.body, planned.scopes);
-  return normalizeMessage(raw);
+  try {
+    const raw = await graph.send<GraphChatMessage>(planned.path, planned.body, planned.scopes);
+    return normalizeMessage(raw);
+  } catch (error) {
+    // Stated as a fact about what the call needs, not as advice: the same message reaches agents.
+    if (error instanceof AuthError && (error.status === 403 || error.status === 401)) {
+      throw new AuthError(
+        `${error.message} Posting needs ${planned.scopes.join(', ')}, which "simply teams auth login --allow-writes" asks for.`,
+        error.status,
+      );
+    }
+    throw error;
+  }
 }

@@ -127,6 +127,7 @@ export {
   planChannelPost,
   planChannelReply,
   planChatSend,
+  parseReplyRef,
   resolveChannel,
   resolveMentions,
   resolveTeamId,

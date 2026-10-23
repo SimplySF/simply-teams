@@ -15,7 +15,7 @@
  */
 
 import { Args } from '@oclif/core';
-import { ConfigError, parseRef, planChannelReply } from '@simplysf/simply-teams-core';
+import { parseReplyRef, planChannelReply } from '@simplysf/simply-teams-core';
 import { TeamsCommand } from '../../../shared/base-command.js';
 import { deliver, messageFlags, writeInput, type WriteResult } from '../../../shared/write-output.js';
 
@@ -44,12 +44,7 @@ export default class MessageReply extends TeamsCommand<typeof MessageReply> {
   public static override readonly flags = { ...messageFlags };
 
   public async run(): Promise<WriteResult> {
-    const ref = parseRef(this.args.message, ['channelMessage', 'chatMessage']);
-    if (ref.kind === 'chatMessage') {
-      throw new ConfigError(
-        `That is a chat message, and chats have no threads. Send to the chat instead: teams chat send ${ref.chatId}`,
-      );
-    }
+    const ref = parseReplyRef(this.args.message);
     const graph = this.graph();
     const planned = await planChannelReply(graph, ref, writeInput(this.flags));
     return deliver(graph, planned, this.flags['dry-run'], (message) => this.logSafe(message));

@@ -72,7 +72,7 @@ const PERMANENT_TRANSPORT_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', ...CERT_COD
  * Transport failures that prove the request never reached Graph, so a write may retry them. Every
  * other mid-flight failure — a reset, a dropped socket — can land after Graph has acted.
  */
-const NEVER_SENT_CODES = new Set(['ECONNREFUSED']);
+const NEVER_SENT_CODES = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
 
 /** Appended when a write fails in a way that does not say whether Graph applied it. */
 const MAY_HAVE_APPLIED = ' The message may have been posted; check before retrying.';

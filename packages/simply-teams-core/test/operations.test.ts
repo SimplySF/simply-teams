@@ -25,6 +25,7 @@ import {
   planChannelPost,
   planChannelReply,
   planChatSend,
+  parseReplyRef,
   resolveChannel,
   searchMessages,
   sendPlanned,
@@ -331,6 +332,28 @@ describe('writes (design 0004)', () => {
     await expect(planChatSend(graph(), CHAT, { text: 'x', mentions: ['nobody@example.test'] })).rejects.toThrow(
       /No user found for the mention "nobody@example.test"/,
     );
+  });
+
+  it('refuses an unknown user ID as a config error too', async () => {
+    server.route('/v1.0/users/00000000-0000-0000-0000-000000000000', (_req, res) => {
+      respondJson(res, 404, { error: { code: 'Request_ResourceNotFound' } });
+    });
+    await expect(
+      planChatSend(graph(), CHAT, { text: 'x', mentions: ['00000000-0000-0000-0000-000000000000'] }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  it('names the scope and the login that asks for it when a send is refused', async () => {
+    server.route(`/v1.0/chats/${encodeURIComponent(CHAT)}/messages`, (_req, res) => {
+      respondJson(res, 403, { error: { code: 'Forbidden', message: 'Missing scope permissions on the request.' } });
+    });
+    const planned = await planChatSend(graph(), CHAT, { text: 'x' });
+    await expect(sendPlanned(graph(), planned)).rejects.toThrow(/ChatMessage\.Send.*auth login --allow-writes/);
+  });
+
+  it('refuses a reply to a chat message, naming chat send', () => {
+    expect(() => parseReplyRef(`${CHAT}/42`)).toThrow(/chats have no threads.*teams chat send/);
+    expect(parseReplyRef(`${TEAM}/${CHANNEL}/100/105`)).toMatchObject({ kind: 'channelMessage', rootId: '100' });
   });
 
   it('finds a mention by mail when the address is not a UPN, as for an alias or a guest', async () => {

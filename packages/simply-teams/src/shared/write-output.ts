@@ -16,7 +16,6 @@
 
 import { Flags } from '@oclif/core';
 import {
-  AuthError,
   type GraphClient,
   type PlannedWrite,
   sendPlanned,
@@ -67,18 +66,7 @@ export async function deliver(
     log(`Dry run: nothing was sent. ${planned.method} ${planned.path}\n${JSON.stringify(planned.body, null, 2)}`);
     return planned;
   }
-  try {
-    const posted = await sendPlanned(graph, planned);
-    log(`Posted as ${posted.from?.name ?? 'you'}.\n\n${renderMessage(posted)}\n\nref: ${posted.ref}`);
-    return posted;
-  } catch (error) {
-    // Stated as a fact about what the call needs, not as advice: the same message reaches agents.
-    if (error instanceof AuthError && (error.status === 403 || error.status === 401)) {
-      throw new AuthError(
-        `${error.message} Posting needs ${planned.scopes.join(', ')}, which "simply teams auth login --allow-writes" asks for.`,
-        error.status,
-      );
-    }
-    throw error;
-  }
+  const posted = await sendPlanned(graph, planned);
+  log(`Posted as ${posted.from?.name ?? 'you'}.\n\n${renderMessage(posted)}\n\nref: ${posted.ref}`);
+  return posted;
 }

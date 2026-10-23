@@ -109,6 +109,7 @@ describe('@simplysf/simply-teams-core', () => {
         'planChannelPost',
         'planChannelReply',
         'planChatSend',
+        'parseReplyRef',
         'resolveMentions',
         'sendPlanned',
       ].sort(),
