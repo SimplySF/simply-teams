@@ -77,6 +77,7 @@ const BENIGN = [
   'Page id 360526, version 4.2.1, port 8090.',
   'The token is set by the server environment.',
   '[EMAIL-1] wrote this section.',
+  'see 19:aaaa-bbbb_cccc-dddd@unq.gbl.spaces and 19:abc@thread.skype',
 ];
 
 describe('TeamsGuard', () => {
@@ -162,13 +163,28 @@ describe('cleanResult', () => {
     expect(report.summary).toBe('Cleaned: 1 item withheld for holding a secret.');
   });
 
-  it('withholds a message whose attachment name holds a secret, and drops the names', () => {
+  it('withholds a message whose attachment name holds a secret, and drops the names and links', () => {
     const { value } = cleanResult(
       new TeamsGuard(),
-      message('3', 'see attached', { attachments: [{ name: `${aws}.txt`, kind: 'file' }] }),
+      message('3', 'see attached', {
+        attachments: [{ name: `${aws}.txt`, kind: 'file', url: `https://contoso.sharepoint.com/x/${aws}.txt` }],
+      }),
     );
     expect(value.text).toMatch(/withheld/);
     expect(value.attachments[0]?.name).toBeUndefined();
+    expect(JSON.stringify(value)).not.toContain(aws);
+  });
+
+  it('counts a message that appears twice in a view once', () => {
+    const secret = message('8', `key ${aws}`);
+    const { value, report } = cleanResult(new TeamsGuard(), {
+      message: secret,
+      thread: [secret, message('9', 'ok')],
+      warnings: [],
+    });
+    expect(report.withheld).toBe(1);
+    expect(report.summary).toBe('Cleaned: 1 item withheld for holding a secret.');
+    expect(value.thread[0]?.text).toMatch(/withheld/);
   });
 
   it('replaces personal data across a result with placeholders that stay the same, and leaves identifiers alone', () => {

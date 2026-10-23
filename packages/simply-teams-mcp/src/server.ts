@@ -156,7 +156,10 @@ export async function invokeTool(
         : { result: value, cleaned: report };
     return { content: [{ type: 'text', text: JSON.stringify(cleaned) }] };
   } catch (error) {
-    return errorResult(mapError(error, context));
+    const mapped = mapError(error, context);
+    // A failure can quote what was sent: a restored address in a path, a body Graph echoed back.
+    // It is cleaned like a result, so nothing the guard hid comes back through an error.
+    return errorResult(context.guard === undefined ? mapped : cleanResult(context.guard, mapped).value);
   }
 }
 

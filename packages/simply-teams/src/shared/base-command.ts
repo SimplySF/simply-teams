@@ -260,6 +260,11 @@ export abstract class TeamsCommand<T extends typeof Command> extends Command {
     if (this.rawFlags.clean !== true) return value;
     const { value: clean, report } = cleanResult(new TeamsGuard(), value);
     if (report.withheld > 0 || Object.keys(report.redacted).length > 0) this.warn(report.summary);
+    // Under --json the warning is silenced, so the report rides with the result, as it does from
+    // the MCP server.
+    if (typeof clean === 'object' && clean !== null && !Array.isArray(clean)) {
+      return { ...clean, cleaned: report };
+    }
     return clean;
   }
 

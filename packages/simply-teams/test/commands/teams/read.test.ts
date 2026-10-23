@@ -174,5 +174,6 @@ describe('--clean (design 0005)', () => {
     expect(stdout.join('')).not.toContain(aws);
     expect(stdout.join('')).not.toContain('jane.doe');
     expect(String(warn.mock.calls[0]?.[0])).toMatch(/1 item withheld/);
+    expect((result as { cleaned?: { withheld: number } }).cleaned).toMatchObject({ withheld: 1 });
   });
 });

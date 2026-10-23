@@ -97,11 +97,12 @@ const DETECTORS: readonly Detector[] = [
     valueGroup: 1,
     confirm: notPlaceholder,
   },
-  // Not right after a slash: user@host in a URL is a login name, not an email address.
+  // Not right after a slash: user@host in a URL is a login name, not an email address. Nor right
+  // after a digit and a colon: a Teams chat or channel ID is `19:…@thread.v2` or `19:…@unq.gbl.spaces`.
   {
     type: 'email address',
     kind: 'personal',
-    pattern: /(?<![/\w.%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    pattern: /(?<![/\w.%+-])(?<!\d:)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
   },
   {
     type: 'US social security number',

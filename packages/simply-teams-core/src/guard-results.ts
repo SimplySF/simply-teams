@@ -69,6 +69,8 @@ type Json = unknown;
 class Cleaner {
   public withheld = 0;
   public readonly redacted: Record<string, number> = {};
+  /** Items by ref, so one that appears twice in a result (a view's message, and in its thread) is counted once. */
+  private readonly seen = new Map<string, Record<string, Json>>();
 
   public constructor(private readonly guard: TeamsGuard) {}
 
@@ -80,6 +82,15 @@ class Cleaner {
   }
 
   private cleanObject(object: Record<string, Json>): Record<string, Json> {
+    const ref = typeof object.ref === 'string' ? object.ref : undefined;
+    const already = ref === undefined ? undefined : this.seen.get(ref);
+    if (already !== undefined) return already;
+    const cleaned = this.cleanItem(object);
+    if (ref !== undefined) this.seen.set(ref, cleaned);
+    return cleaned;
+  }
+
+  private cleanItem(object: Record<string, Json>): Record<string, Json> {
     const secrets = secretsInItem(object);
     if (secrets.length > 0) this.withheld += 1;
     const out: Record<string, Json> = {};
@@ -88,7 +99,10 @@ class Cleaner {
         out[key] = withheldNote(secrets);
       } else if (secrets.length > 0 && key === 'attachments' && Array.isArray(item)) {
         out[key] = item.map((attachment: Json) =>
-          typeof attachment === 'object' && attachment !== null ? { ...attachment, name: undefined } : attachment,
+          // A file's link ends in its name, so the link goes with it.
+          typeof attachment === 'object' && attachment !== null
+            ? { ...attachment, name: undefined, url: undefined }
+            : attachment,
         );
       } else if (IDENTIFIERS.has(key)) {
         out[key] = item;

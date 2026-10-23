@@ -131,6 +131,28 @@ describe('cleaning (design 0005)', () => {
     expect((payload(posted) as { text: string }).text).toBe('thanks [EMAIL-1]');
   });
 
+  it('cleans an error too, so a restored address cannot come back through it', async () => {
+    const ctx = context();
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('1', '<p>from jane.doe@example.com</p>')] });
+    });
+    await invokeTool(spec('teams_chat_messages'), ctx, { chat });
+    server.route('/v1.0/users/jane.doe%40example.com', (_req, res) => {
+      respondJson(res, 404, {
+        error: { code: 'Request_ResourceNotFound', message: 'no such user jane.doe@example.com' },
+      });
+    });
+    server.route('/v1.0/users', (_req, res) => {
+      respondJson(res, 200, { value: [] });
+    });
+
+    const result = await invokeTool(spec('teams_chat_send'), ctx, { chat, text: 'hi', mentions: ['[EMAIL-1]'] });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('jane.doe');
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringContaining('[EMAIL-1]') });
+  });
+
   it("passes the sign-in status through, since it is about this session rather than anyone's message", async () => {
     server.route('/v1.0/me', (_req, res) => {
       respondJson(res, 200, { id: 'u1', displayName: 'Ada', userPrincipalName: 'ada@contoso.com' });
