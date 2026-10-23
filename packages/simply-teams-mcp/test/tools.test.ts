@@ -79,10 +79,12 @@ describe('the tool catalogue', () => {
     }
   });
 
-  it('marks nothing as a write yet', () => {
-    // Version 1 is read-only (design 0001). The first write tool arrives with its own design doc,
-    // which is also where this list starts naming tools.
-    expect(TOOLS.filter((tool) => tool.kind === 'write').map((tool) => tool.name)).toStrictEqual([]);
+  it('marks exactly the posting tools as writes (design 0004)', () => {
+    expect(TOOLS.filter((tool) => tool.kind === 'write').map((tool) => tool.name)).toStrictEqual([
+      'teams_channel_post',
+      'teams_message_reply',
+      'teams_chat_send',
+    ]);
   });
 
   it('gives every tool a title and a description worth reading', () => {

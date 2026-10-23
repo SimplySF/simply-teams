@@ -34,6 +34,12 @@ export interface JsonCall {
   readonly body?: unknown;
   /** Short scope names this call needs; the token provider's default when omitted. */
   readonly scopes?: readonly string[];
+  /**
+   * Whether this call changes data. Declared by the caller rather than guessed from the verb,
+   * because the verb is not a reliable signal: search is a POST that reads. A mutating call is
+   * retried only when the failure proves Graph did not act (design 0004).
+   */
+  readonly mutating?: boolean;
 }
 
 /** Where and how a transport talks: fixed per client instance. */
@@ -62,10 +68,19 @@ const CERT_CODES = new Set([
 /** Transport failures another attempt cannot fix: the host or the trust decision is wrong. */
 const PERMANENT_TRANSPORT_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', ...CERT_CODES]);
 
-/** What one attempt concluded: a parsed value, a retryable failure, or a token Graph refused. */
+/**
+ * Transport failures that prove the request never reached Graph, so a write may retry them. Every
+ * other mid-flight failure — a reset, a dropped socket — can land after Graph has acted.
+ */
+const NEVER_SENT_CODES = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
+
+/** Appended when a write fails in a way that does not say whether Graph applied it. */
+const MAY_HAVE_APPLIED = ' The message may have been posted; check before retrying.';
+
+/** What one attempt concluded: a parsed value, a failed attempt, or a token Graph refused. */
 type AttemptOutcome<T> =
   | { kind: 'done'; value: T }
-  | { kind: 'retry'; delayMs?: number; exhausted: () => HttpError }
+  | { kind: 'retry'; delayMs?: number; retryable: boolean; exhausted: () => HttpError }
   | { kind: 'unauthorized'; error: AuthError };
 
 function delay(ms: number): Promise<void> {
@@ -120,6 +135,11 @@ export class HttpTransport {
    * become `HttpError`. Timeouts, DNS misses, and certificate failures become `NetworkError`
    * without pointless retries; transient socket failures retry. The timeout covers the whole
    * exchange, response body included.
+   *
+   * A `mutating` call retries only what proves Graph did not act: a 429, or a connection refused
+   * outright. A 5xx, a dropped connection or a timeout can follow a message Graph already posted,
+   * and Graph messages have no idempotency key, so those fail at once and say so (design 0004).
+   * A 401 is still answered with one refresh: Graph rejects the token before doing anything.
    */
   public async json<T>(call: JsonCall): Promise<T> {
     const url = this.resolve(call);
@@ -130,8 +150,18 @@ export class HttpTransport {
     /* eslint-disable no-await-in-loop */
     for (let attempt = 1; ; attempt += 1) {
       let outcome: AttemptOutcome<T>;
+      let token: string;
       try {
-        const { token } = await this.target.tokens.getToken({ forceRefresh: refreshed, scopes: call.scopes });
+        ({ token } = await this.target.tokens.getToken({ forceRefresh: refreshed, scopes: call.scopes }));
+      } catch (error) {
+        // Nothing has been sent yet, so even a write may try again: the "may have been posted"
+        // wording would send someone to check Teams for a duplicate that cannot exist.
+        const verdict = this.triage(error, { ...call, mutating: false }, url, attempt);
+        if (verdict !== TRANSIENT) throw verdict;
+        await delay(BACKOFF_BASE_MS * 2 ** (attempt - 1));
+        continue;
+      }
+      try {
         outcome = await this.attempt<T>(url, call, token);
       } catch (error) {
         const verdict = this.triage(error, call, url, attempt);
@@ -147,7 +177,7 @@ export class HttpTransport {
         attempt -= 1;
         continue;
       }
-      if (attempt >= this.maxAttempts) throw outcome.exhausted();
+      if (!outcome.retryable || attempt >= this.maxAttempts) throw outcome.exhausted();
       await delay(outcome.delayMs ?? BACKOFF_BASE_MS * 2 ** (attempt - 1));
     }
     /* eslint-enable no-await-in-loop */
@@ -206,10 +236,14 @@ export class HttpTransport {
         const retryAfter = readRetryAfter(response.headers.get('retry-after'));
         const status = response.status;
         const detail = await describeBody(response);
+        // A 429 is refused before any work is done; a 5xx may follow a write that landed.
+        const retryable = call.mutating !== true || status === 429;
+        const hint = retryable ? '' : MAY_HAVE_APPLIED;
         return {
           kind: 'retry',
           delayMs: retryAfter,
-          exhausted: () => new HttpError(`${call.method} ${call.path} failed (${status}).${detail}`, status),
+          retryable,
+          exhausted: () => new HttpError(`${call.method} ${call.path} failed (${status}).${detail}${hint}`, status),
         };
       }
 
@@ -228,9 +262,11 @@ export class HttpTransport {
   private triage(error: unknown, call: JsonCall, url: URL, attempt: number): CliError | typeof TRANSIENT {
     if (error instanceof CliError) return error;
 
+    const unsure = call.mutating === true ? MAY_HAVE_APPLIED : '';
+
     if (isAbort(error)) {
       return new NetworkError(
-        `${call.method} ${call.path} did not complete within ${this.timeoutMs} ms (${url.host}).`,
+        `${call.method} ${call.path} did not complete within ${this.timeoutMs} ms (${url.host}).${unsure}`,
       );
     }
 
@@ -242,12 +278,18 @@ export class HttpTransport {
       return new NetworkError(`Cannot reach ${url.host}: ${code}.${hint}`);
     }
 
+    const description = code ?? (error instanceof Error ? error.message : String(error));
+
+    if (call.mutating === true && (code === undefined || !NEVER_SENT_CODES.has(code))) {
+      // The request may have reached Graph before the connection dropped: never repeat it.
+      return new NetworkError(`${call.method} ${call.path} failed: ${description}.${unsure}`);
+    }
+
     if (attempt < this.maxAttempts) {
       // Transient transport failure (connection reset, refused, mid-flight drop): try again.
       return TRANSIENT;
     }
 
-    const description = code ?? (error instanceof Error ? error.message : String(error));
     return new NetworkError(`${call.method} ${call.path} failed after ${attempt} attempts: ${description}.`);
   }
 

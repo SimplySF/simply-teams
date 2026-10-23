@@ -16,7 +16,7 @@
 
 import { Args, Flags } from '@oclif/core';
 import { type ListResult, listChatMessages, parseDate, parseRef, type TeamsMessage } from '@simplysf/simply-teams-core';
-import { limitFlag, TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderTranscript } from '../../../shared/message-output.js';
 
 export default class ChatMessages extends TeamsCommand<typeof ChatMessages> {
@@ -40,6 +40,7 @@ export default class ChatMessages extends TeamsCommand<typeof ChatMessages> {
   };
 
   public static override readonly flags = {
+    ...cleanFlag,
     since: Flags.string({ summary: 'Stop at messages older than this: YYYY-MM-DD, or relative like 7d.' }),
     'include-events': Flags.boolean({
       summary: 'Also show system events (calls, membership changes).',
@@ -51,11 +52,13 @@ export default class ChatMessages extends TeamsCommand<typeof ChatMessages> {
   public async run(): Promise<ListResult<TeamsMessage>> {
     const { flags } = this;
     const ref = parseRef(this.args.chat, ['chat', 'chatMessage']);
-    const result = await listChatMessages(this.graph(), ref.chatId, {
-      since: flags.since === undefined ? undefined : parseDate(flags.since),
-      limit: flags.limit,
-      includeEvents: flags['include-events'],
-    });
+    const result = this.cleaned(
+      await listChatMessages(this.graph(), ref.chatId, {
+        since: flags.since === undefined ? undefined : parseDate(flags.since),
+        limit: flags.limit,
+        includeEvents: flags['include-events'],
+      }),
+    );
     this.logSafe(result.items.length === 0 ? 'No messages.' : renderTranscript(result.items));
     this.reportList(result.items.length, result.complete, flags.limit, 'messages');
     return result;

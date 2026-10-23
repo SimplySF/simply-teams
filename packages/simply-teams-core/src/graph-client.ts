@@ -97,9 +97,17 @@ export class GraphClient {
     return this.transport.json<T>({ method: 'GET', path, query, scopes });
   }
 
-  /** A POST that reads, such as `/search/query`. Nothing in this CLI writes yet (design 0001). */
+  /** A POST that reads, such as `/search/query`. Writes go through {@link send}. */
   public post<T>(path: string, body: unknown, scopes: readonly string[]): Promise<T> {
     return this.transport.json<T>({ method: 'POST', path, body, scopes });
+  }
+
+  /**
+   * A POST that changes something in Teams (design 0004). Marked mutating, so it is never sent
+   * twice: a failure that could have followed a posted message is reported, not retried.
+   */
+  public send<T>(path: string, body: unknown, scopes: readonly string[]): Promise<T> {
+    return this.transport.json<T>({ method: 'POST', path, body, scopes, mutating: true });
   }
 
   /**

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { AuthError, ConfigError } from './errors.js';
+import { AuthError, ConfigError, HttpError } from './errors.js';
 import type { GraphClient, ListResult } from './graph-client.js';
 import { buildSearchQuery, type SearchFilters } from './kql.js';
 import {
@@ -28,7 +28,14 @@ import {
   type TeamsMessage,
   type TeamsSearchHit,
 } from './messages.js';
-import type { Selector, TeamsRef } from './refs.js';
+import {
+  buildMessageBody,
+  type MentionTarget,
+  type MessageBody,
+  type MessageInput,
+  validateMessageInput,
+} from './message-body.js';
+import { parseRef, type Selector, type TeamsRef } from './refs.js';
 import { stripControlOneLine } from './text.js';
 
 /** The scopes each kind of read needs (design 0002, Commands). Each call asks for exactly these. */
@@ -38,6 +45,9 @@ export const SCOPES = {
   teams: ['Team.ReadBasic.All'],
   channels: ['Channel.ReadBasic.All'],
   channelMessages: ['ChannelMessage.Read.All'],
+  users: ['User.ReadBasic.All'],
+  channelSend: ['ChannelMessage.Send'],
+  chatSend: ['ChatMessage.Send'],
 } as const;
 
 /** Graph's documented example page size for message search; the true maximum is unverified (0002). */
@@ -442,4 +452,142 @@ export async function listChannelMessages(
   }
   /* eslint-enable no-await-in-loop */
   return { items: withReplies, pages, complete };
+}
+
+// --- Writes (design 0004) ---
+
+/** What a write would send: shown by `--dry-run`, and exactly what is sent otherwise. */
+export interface PlannedWrite {
+  readonly method: 'POST';
+  readonly path: string;
+  readonly body: MessageBody;
+  /** The scope sending it needs. A dry run needs none of the write scopes. */
+  readonly scopes: readonly string[];
+}
+
+/** A message to post: its text or HTML, and anyone to @-mention by email, UPN or user ID. */
+export interface WriteInput extends MessageInput {
+  readonly mentions?: readonly string[];
+}
+
+interface GraphUserRef {
+  readonly id: string;
+  readonly displayName?: string | null;
+}
+
+/**
+ * One person, by user ID, UPN, or email address. `GET /users/{x}` takes an ID or a UPN only; an
+ * address that is a mail alias, or a guest (whose UPN is `name_domain#EXT#@tenant`), is found by
+ * filtering on `mail` instead. Nothing found is a `ConfigError` naming what was asked for.
+ */
+async function findUser(graph: GraphClient, wanted: string): Promise<GraphUserRef> {
+  const select = { $select: ['id', 'displayName'] };
+  try {
+    return await graph.get<GraphUserRef>(`/users/${encode(wanted)}`, SCOPES.users, select);
+  } catch (error) {
+    if (!(error instanceof HttpError && error.status === 404)) throw error;
+    if (!wanted.includes('@')) throw new ConfigError(`No user found for the mention "${wanted}".`);
+  }
+  const byMail = await graph.get<{ value?: readonly GraphUserRef[] }>('/users', SCOPES.users, {
+    ...select,
+    // OData quotes a string with single quotes, doubled to escape.
+    $filter: `mail eq '${wanted.replaceAll("'", "''")}'`,
+  });
+  const found = byMail.value?.[0];
+  if (found === undefined) throw new ConfigError(`No user found for the mention "${wanted}".`);
+  return found;
+}
+
+/**
+ * Resolves each mention to a Graph user, so the message can link them. Takes an email address,
+ * a UPN, or a user ID; one that matches no user is a `ConfigError` naming it, before anything is
+ * posted.
+ */
+export async function resolveMentions(graph: GraphClient, people: readonly string[]): Promise<MentionTarget[]> {
+  const resolved: MentionTarget[] = [];
+  /* Sequential: a handful of lookups, and the first unknown name should stop the rest. */
+  /* eslint-disable no-await-in-loop */
+  for (const person of people) {
+    const wanted = person.trim();
+    if (wanted === '') continue;
+    const user = await findUser(graph, wanted);
+    resolved.push({ id: user.id, name: clean(user.displayName) ?? wanted });
+  }
+  /* eslint-enable no-await-in-loop */
+  return resolved;
+}
+
+async function plan(
+  graph: GraphClient,
+  path: string,
+  input: WriteInput,
+  scopes: readonly string[],
+): Promise<PlannedWrite> {
+  // Checked before any lookup, so an empty message fails without a request.
+  validateMessageInput(input);
+  const mentions = await resolveMentions(graph, input.mentions ?? []);
+  return { method: 'POST', path, body: buildMessageBody(input, mentions), scopes };
+}
+
+/**
+ * The thread a reply goes to, from whatever the caller pasted. A chat message is refused here,
+ * with the command to use instead: chats have no threads, so "reply" has no meaning in one.
+ */
+export function parseReplyRef(input: string): Extract<TeamsRef, { kind: 'channelMessage' }> {
+  const ref = parseRef(input, ['channelMessage', 'chatMessage']);
+  if (ref.kind === 'chatMessage') {
+    throw new ConfigError(
+      `That is a chat message, and chats have no threads. Send to the chat instead: teams chat send ${ref.chatId}`,
+    );
+  }
+  return ref;
+}
+
+/** A new post in a channel. */
+export async function planChannelPost(
+  graph: GraphClient,
+  ref: Extract<TeamsRef, { kind: 'channel' }>,
+  input: WriteInput,
+): Promise<PlannedWrite> {
+  const { teamId, channelId } = await resolveChannel(graph, ref);
+  return plan(graph, `/teams/${encode(teamId)}/channels/${encode(channelId)}/messages`, input, SCOPES.channelSend);
+}
+
+/**
+ * A reply in a channel thread. A reply's ref names its root, and Teams threads are one level
+ * deep, so replying to a reply replies to the thread it is in.
+ */
+export async function planChannelReply(
+  graph: GraphClient,
+  ref: Extract<TeamsRef, { kind: 'channelMessage' }>,
+  input: WriteInput,
+): Promise<PlannedWrite> {
+  const rootId = ref.rootId ?? ref.messageId;
+  const path = `/teams/${encode(ref.teamId)}/channels/${encode(ref.channelId)}/messages/${encode(rootId)}/replies`;
+  return plan(graph, path, input, SCOPES.channelSend);
+}
+
+/** A message in a 1:1, group, or meeting chat. Chats have no threads, so there is no chat reply. */
+export async function planChatSend(graph: GraphClient, chatId: string, input: WriteInput): Promise<PlannedWrite> {
+  return plan(graph, `/chats/${encode(chatId)}/messages`, input, SCOPES.chatSend);
+}
+
+/**
+ * Sends a planned write and returns what Teams stored, in the same shape the read commands
+ * return. Sent once: a failure that could have followed a posted message is reported, not retried.
+ */
+export async function sendPlanned(graph: GraphClient, planned: PlannedWrite): Promise<TeamsMessage> {
+  try {
+    const raw = await graph.send<GraphChatMessage>(planned.path, planned.body, planned.scopes);
+    return normalizeMessage(raw);
+  } catch (error) {
+    // Stated as a fact about what the call needs, not as advice: the same message reaches agents.
+    if (error instanceof AuthError && (error.status === 403 || error.status === 401)) {
+      throw new AuthError(
+        `${error.message} Posting needs ${planned.scopes.join(', ')}, which "simply teams auth login --allow-writes" asks for.`,
+        error.status,
+      );
+    }
+    throw error;
+  }
 }

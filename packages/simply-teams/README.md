@@ -2,7 +2,7 @@
 
 [![NPM](https://img.shields.io/npm/v/@simplysf/simply-teams?label=@simplysf/simply-teams)](https://npmjs.com/@simplysf/simply-teams) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://raw.githubusercontent.com/SimplySF/simply-teams/main/LICENSE.txt)
 
-Command-line interface for reading Microsoft Teams, built by [SimplySF](https://github.com/SimplySF).
+Command-line interface for reading and posting in Microsoft Teams, built by [SimplySF](https://github.com/SimplySF).
 
 It signs in as the account your operating system is already signed in with, through its identity
 broker (Web Account Manager on Windows), so on an Entra ID–joined machine there is normally no
@@ -10,8 +10,9 @@ prompt and nothing is stored. Output is human-readable by default and JSON with 
 usable both at a terminal and by a script or agent. See [Commands](#commands) below for the full
 reference.
 
-This release covers sign-in (`teams auth login`, `teams auth status`). Message search and reading
-chats, channels, and threads come next.
+It signs in, searches messages, and reads chats, channels, and threads. It can also post in a
+channel, reply in a thread, and send in a chat, as you; writing is opt-in, previewable with
+`--dry-run`, and refused under `TEAMS_READ_ONLY` (see [Write safety](docs/guides/write-safety.md)).
 
 The same capabilities are available to AI agents through
 [`@simplysf/simply-teams-mcp`](https://github.com/SimplySF/simply-teams/tree/main/packages/simply-teams-mcp).
@@ -105,8 +106,11 @@ identical with and without `--json`.
 - [`simply teams auth status`](#simply-teams-auth-status)
 - [`simply teams channel list TEAM`](#simply-teams-channel-list-team)
 - [`simply teams channel messages CHANNEL`](#simply-teams-channel-messages-channel)
+- [`simply teams channel post CHANNEL`](#simply-teams-channel-post-channel)
 - [`simply teams chat list`](#simply-teams-chat-list)
 - [`simply teams chat messages CHAT`](#simply-teams-chat-messages-chat)
+- [`simply teams chat send CHAT`](#simply-teams-chat-send-chat)
+- [`simply teams message reply MESSAGE`](#simply-teams-message-reply-message)
 - [`simply teams message search [QUERY]`](#simply-teams-message-search-query)
 - [`simply teams message view REF`](#simply-teams-message-view-ref)
 - [`simply teams team list`](#simply-teams-team-list)
@@ -118,7 +122,10 @@ Sign in through the operating system, confirming once if asked.
 ```
 USAGE
   $ simply teams auth login [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod]
+    global|usgov-high|dod] [--allow-writes]
+
+FLAGS
+  --allow-writes  Also ask for the scopes posting needs (ChannelMessage.Send, ChatMessage.Send).
 
 CONNECTION FLAGS
   -e, --env-file=<value>   Path to a .env file holding connection settings.
@@ -145,8 +152,16 @@ DESCRIPTION
   administrator. Login does not wait for it: the chat, team, and channel list commands work straight away, and login
   prints the link an administrator can use to grant it.
 
+  Posting is opt-in. --allow-writes also asks for ChannelMessage.Send and ChatMessage.Send, which any user can grant.
+  Consider a separate app registration for writing, so the one an agent uses every day can only read: the broker hands
+  out every scope ever granted to an app.
+
 EXAMPLES
   $ simply teams auth login
+
+  Also allow posting and replying
+
+    $ simply teams auth login --allow-writes
 
 FLAG DESCRIPTIONS
   -e, --env-file=<value>  Path to a .env file holding connection settings.
@@ -211,10 +226,13 @@ List the channels in a team.
 ```
 USAGE
   $ simply teams channel list TEAM [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod]
+    global|usgov-high|dod] [--clean]
 
 ARGUMENTS
   TEAM  A team name, ref, or link.
+
+FLAGS
+  --clean  Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server does.
 
 CONNECTION FLAGS
   -e, --env-file=<value>   Path to a .env file holding connection settings.
@@ -252,12 +270,14 @@ Read the recent posts in a channel, oldest first.
 ```
 USAGE
   $ simply teams channel messages CHANNEL [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--since <value>] [--replies] [--include-events] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--since <value>] [--replies] [--include-events] [--limit <value>]
 
 ARGUMENTS
   CHANNEL  A channel link, a channel ref, or "Team/Channel" by name.
 
 FLAGS
+  --clean           Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                    does.
   --include-events  Also show system events.
   --limit=<value>   [default: 25] Maximum number of posts to return across all pages.
   --replies         Also fetch each post's replies.
@@ -296,6 +316,62 @@ FLAG DESCRIPTIONS
 
 _See code: [lib/commands/teams/channel/messages.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/channel/messages.js)_
 
+## `simply teams channel post CHANNEL`
+
+Start a new thread in a channel, as you.
+
+```
+USAGE
+  $ simply teams channel post CHANNEL [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--text <value> | --html <value>] [--mention <value>...] [--dry-run]
+
+ARGUMENTS
+  CHANNEL  A channel link, a channel ref, or "Team/Channel" by name.
+
+FLAGS
+  --dry-run             Print the request that would be sent and exit without sending it.
+  --html=<value>        The message as Teams HTML, for formatting.
+  --mention=<value>...  Someone to @-mention, by email, UPN, or user ID. Repeatable. Mentions go at the start.
+  --text=<value>        The message as plain text. Markup in it is shown, not applied.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Start a new thread in a channel, as you.
+
+  Takes a channel link, a channel ref from "teams channel list", or "Team name/Channel name". The post appears exactly
+  as if you had typed it: your name, and a notification for everyone who follows the channel. Use --dry-run to see the
+  request first.
+
+  Needs ChannelMessage.Send, which "teams auth login --allow-writes" asks for. TEAMS_READ_ONLY refuses it.
+
+EXAMPLES
+  Announce a deploy
+
+    $ simply teams channel post "Platform/General" --text "Deployed 2.3 to staging"
+
+  Preview a post that mentions someone
+
+    $ simply teams channel post "Platform/General" --text "please review" --mention ada@contoso.com --dry-run
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/channel/post.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/channel/post.js)_
+
 ## `simply teams chat list`
 
 List your chats, most recently active first.
@@ -303,9 +379,11 @@ List your chats, most recently active first.
 ```
 USAGE
   $ simply teams chat list [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--limit <value>]
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --limit=<value>  [default: 20] Maximum number of chats to return across all pages.
 
 CONNECTION FLAGS
@@ -344,12 +422,14 @@ Read the recent messages in a chat, oldest first.
 ```
 USAGE
   $ simply teams chat messages CHAT [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--since <value>] [--include-events] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--since <value>] [--include-events] [--limit <value>]
 
 ARGUMENTS
   CHAT  A Teams chat link, or a chat ref.
 
 FLAGS
+  --clean           Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                    does.
   --include-events  Also show system events (calls, membership changes).
   --limit=<value>   [default: 50] Maximum number of messages to return across all pages.
   --since=<value>   Stop at messages older than this: YYYY-MM-DD, or relative like 7d.
@@ -388,6 +468,109 @@ FLAG DESCRIPTIONS
 
 _See code: [lib/commands/teams/chat/messages.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/chat/messages.js)_
 
+## `simply teams chat send CHAT`
+
+Send a message in a chat, as you.
+
+```
+USAGE
+  $ simply teams chat send CHAT [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--text <value> | --html <value>] [--mention <value>...] [--dry-run]
+
+ARGUMENTS
+  CHAT  A Teams chat link, or a chat ref.
+
+FLAGS
+  --dry-run             Print the request that would be sent and exit without sending it.
+  --html=<value>        The message as Teams HTML, for formatting.
+  --mention=<value>...  Someone to @-mention, by email, UPN, or user ID. Repeatable. Mentions go at the start.
+  --text=<value>        The message as plain text. Markup in it is shown, not applied.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Send a message in a chat, as you.
+
+  Takes a chat link, a chat ref from "teams chat list", or a chat message ref (the message goes to that chat). It
+  appears exactly as if you had typed it. Use --dry-run to see the request first.
+
+  Needs ChatMessage.Send, which "teams auth login --allow-writes" asks for. TEAMS_READ_ONLY refuses it.
+
+EXAMPLES
+  Answer in a chat
+
+    $ simply teams chat send <chat-ref> --text "Thanks, on it."
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/chat/send.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/chat/send.js)_
+
+## `simply teams message reply MESSAGE`
+
+Reply in a channel message's thread, as you.
+
+```
+USAGE
+  $ simply teams message reply MESSAGE [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--text <value> | --html <value>] [--mention <value>...] [--dry-run]
+
+ARGUMENTS
+  MESSAGE  A channel message link, or a ref from a result.
+
+FLAGS
+  --dry-run             Print the request that would be sent and exit without sending it.
+  --html=<value>        The message as Teams HTML, for formatting.
+  --mention=<value>...  Someone to @-mention, by email, UPN, or user ID. Repeatable. Mentions go at the start.
+  --text=<value>        The message as plain text. Markup in it is shown, not applied.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Reply in a channel message's thread, as you.
+
+  Takes a channel message link, or a ref from search or a list. Teams threads are one level deep, so replying to a reply
+  replies to the thread it is in. Chats have no threads: to answer in a chat, use "teams chat send". Use --dry-run to
+  see the request first.
+
+  Needs ChannelMessage.Send, which "teams auth login --allow-writes" asks for. TEAMS_READ_ONLY refuses it.
+
+EXAMPLES
+  Reply to a message found by search
+
+    $ simply teams message reply <message-ref> --text "Agreed, shipping Friday."
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/message/reply.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/message/reply.js)_
+
 ## `simply teams message search [QUERY]`
 
 Search the chat and channel messages you can see.
@@ -395,12 +578,15 @@ Search the chat and channel messages you can see.
 ```
 USAGE
   $ simply teams message search [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit
+    <value>]
 
 ARGUMENTS
   [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --from=<value>   Only messages from this person: a name or email address.
   --limit=<value>  [default: 25] Maximum number of results to return across all pages.
   --mentions-me    Only messages that @mention you.
@@ -460,13 +646,15 @@ Show one message in full, optionally with the conversation around it.
 ```
 USAGE
   $ simply teams message view REF [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [-c <value>]
+    global|usgov-high|dod] [--clean] [-c <value>]
 
 ARGUMENTS
   REF  A Teams message link, or a message ref from a result.
 
 FLAGS
   -c, --context=<value>  How many messages to show on each side of this one.
+      --clean            Withhold messages that hold a secret and replace personal data with placeholders, as the MCP
+                         server does.
 
 CONNECTION FLAGS
   -e, --env-file=<value>   Path to a .env file holding connection settings.
@@ -512,9 +700,11 @@ List the teams you are a member of.
 ```
 USAGE
   $ simply teams team list [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--limit <value>]
+    global|usgov-high|dod] [--clean] [--limit <value>]
 
 FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
   --limit=<value>  [default: 100] Maximum number of teams to return across all pages.
 
 CONNECTION FLAGS

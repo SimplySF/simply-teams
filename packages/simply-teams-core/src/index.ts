@@ -51,6 +51,7 @@ export {
   missingScopes,
   READ_SCOPES,
   USER_CONSENT_SCOPES,
+  WRITE_SCOPES,
   shortScope,
   staticTokenProvider,
   type AccessToken,
@@ -77,6 +78,10 @@ export { stripControl, stripControlOneLine } from './text.js';
 export { assertWritesAllowed, isReadOnly, READ_ONLY_ENV } from './write-safety.js';
 export { collectSecrets, redactSecrets, sanitiseDeep, SECRET_ENV, secretValues } from './redaction.js';
 
+// --- Cleaning what an agent sees (design 0005) ---
+export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
+export { cleanResult, restoreInput, type GuardReport } from './guard-results.js';
+
 // --- Shared rendering ---
 export { formatKeyValue, formatTable, type Column, type Pair } from './output.js';
 export { decodeEntities, htmlToText, type AttachmentLabel } from './html-text.js';
@@ -96,9 +101,26 @@ export {
   type TeamsSearchHit,
 } from './messages.js';
 export { buildSearchQuery, parseDate, type SearchFilters } from './kql.js';
+export {
+  buildMessageBody,
+  escapeHtml,
+  textToHtml,
+  type GraphMention,
+  type MentionTarget,
+  type MessageBody,
+  type MessageInput,
+  validateMessageInput,
+} from './message-body.js';
 
 // --- Operations: what each command does between parsing its input and rendering its result ---
-export { adminConsentUrl, authStatus, signIn, type AuthStatus, type SignInResult } from './auth-status.js';
+export {
+  adminConsentUrl,
+  authStatus,
+  signIn,
+  type AuthStatus,
+  type SignInOptions,
+  type SignInResult,
+} from './auth-status.js';
 export {
   listChannelMessages,
   listChannels,
@@ -106,12 +128,20 @@ export {
   listChats,
   listTeams,
   MAX_CONTEXT,
+  planChannelPost,
+  planChannelReply,
+  planChatSend,
+  parseReplyRef,
   resolveChannel,
+  resolveMentions,
   resolveTeamId,
   SCOPES,
   searchMessages,
+  sendPlanned,
   viewMessage,
   type ChannelMessageOptions,
+  type PlannedWrite,
+  type WriteInput,
   type MessageListOptions,
   type MessageView,
   type SearchResult,

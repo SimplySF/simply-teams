@@ -16,7 +16,7 @@
 
 import { Args, Flags } from '@oclif/core';
 import { parseDate, searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
-import { limitFlag, TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderHit } from '../../../shared/message-output.js';
 
 export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
@@ -50,6 +50,7 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
   };
 
   public static override readonly flags = {
+    ...cleanFlag,
     from: Flags.string({ summary: 'Only messages from this person: a name or email address.' }),
     since: Flags.string({ summary: 'Only messages sent on or after this date: YYYY-MM-DD, or relative like 7d.' }),
     until: Flags.string({ summary: 'Only messages sent on or before this date.' }),
@@ -59,16 +60,18 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
 
   public async run(): Promise<SearchResult> {
     const { flags } = this;
-    const result = await searchMessages(
-      this.graph(),
-      this.args.query ?? '',
-      {
-        from: flags.from,
-        since: flags.since === undefined ? undefined : parseDate(flags.since),
-        until: flags.until === undefined ? undefined : parseDate(flags.until),
-        mentionsMe: flags['mentions-me'],
-      },
-      flags.limit,
+    const result = this.cleaned(
+      await searchMessages(
+        this.graph(),
+        this.args.query ?? '',
+        {
+          from: flags.from,
+          since: flags.since === undefined ? undefined : parseDate(flags.since),
+          until: flags.until === undefined ? undefined : parseDate(flags.until),
+          mentionsMe: flags['mentions-me'],
+        },
+        flags.limit,
+      ),
     );
     if (result.items.length === 0) this.log(`No messages match: ${result.query}`);
     else this.logSafe(result.items.map(renderHit).join('\n\n'));

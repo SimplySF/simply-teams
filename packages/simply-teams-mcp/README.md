@@ -52,21 +52,46 @@ that client's configuration. See the MCP server guide for the details.
 
 ## Tools
 
-| Tool                | What it does                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `teams_auth_status` | Who the server is signed in as, which cloud and tenant, and which scopes are missing |
+| Tool                     | What it does                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `teams_auth_status`      | Who the server is signed in as, which cloud and tenant, and which scopes are missing |
+| `teams_message_search`   | Search messages; hits carry a `ref` to fetch the full message                        |
+| `teams_message_view`     | One message, optionally with the messages around it                                  |
+| `teams_chat_list`        | Your chats, most recent first                                                        |
+| `teams_chat_messages`    | A chat's recent messages                                                             |
+| `teams_team_list`        | The teams you belong to                                                              |
+| `teams_channel_list`     | A team's channels                                                                    |
+| `teams_channel_messages` | A channel's posts, optionally with replies                                           |
+| `teams_channel_post`     | **Write.** Start a thread in a channel, as you                                       |
+| `teams_message_reply`    | **Write.** Reply in a channel thread, as you                                         |
+| `teams_chat_send`        | **Write.** Send in a chat, as you                                                    |
 
-The tools for message search and for reading chats, channels, and threads are designed next
-([docs/design](../../docs/design/README.md)). `teams auth login` deliberately has no tool, because
-signing in is something a person does at a terminal.
+`teams auth login` deliberately has no tool, because signing in is something a person does at a
+terminal.
 
 Results are JSON text: exactly what the matching command prints under `--json`.
 
 ## Writes
 
-There are none yet. The server registers only read tools, and `--allow-writes` currently changes
-nothing but the label in `--list`. `TEAMS_READ_ONLY=1` is already honoured for when write tools
-arrive.
+The three write tools are registered only when the server is started with `--allow-writes`, and
+`TEAMS_READ_ONLY=1` refuses them even then. Each takes `dryRun`, which returns the request without
+sending it. A post appears as the signed-in person. A write that fails with "may have been posted"
+was not retried, because a retry could post it twice; check the channel or chat first.
+
+Give the everyday, read-only server a read-only app registration, and start a separate entry with
+`--allow-writes` and a write registration only where posting is meant
+([design 0004](../../docs/design/0004-writes.md)).
+
+## What the agent sees
+
+Every result is cleaned before it is returned (design 0005). A message whose text holds a secret has
+its text replaced with `[withheld: contains a secret (AWS access key)]`, keeping its ref and author.
+Email addresses, phone numbers, social security numbers, card numbers and IBANs become placeholders
+such as `[EMAIL-1]`, the same placeholder for the same value for the life of the server. When the
+agent uses a placeholder in a reply or a search, the server puts the real value back before the
+request reaches Teams. Each result carries a `cleaned` summary of what was removed.
+
+`--no-clean` turns this off, for a person who wants the raw text in their own agent.
 
 ## What agents should know
 

@@ -20,6 +20,7 @@ import { brokerWasLoaded, createTokenProvider } from '@simplysf/simply-teams-aut
 import {
   assertWritesAllowed,
   AuthError,
+  cleanResult,
   CliError,
   CLOUDS,
   type ConfigOverrides,
@@ -32,6 +33,7 @@ import {
   secretValues,
   stripControl,
   type TeamsConfig,
+  TeamsGuard,
   type TokenProvider,
 } from '@simplysf/simply-teams-core';
 
@@ -47,6 +49,18 @@ function errorName(error: unknown, oclifExit: number | undefined): string {
   if (error instanceof CliError) return error.name;
   return oclifExit === undefined ? 'Error' : 'UsageError';
 }
+
+/**
+ * Cleaning for a person who pipes a read command to an agent (design 0005). The MCP server cleans
+ * by default; at a terminal, a person reading their own Teams sees the real text unless they ask.
+ */
+export const cleanFlag = {
+  clean: Flags.boolean({
+    summary:
+      'Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server does.',
+    default: false,
+  }),
+};
 
 /** The paging ceiling, worded once so every list command reads the same. */
 export function limitFlag(fallback: number, what: string): { limit: Interfaces.OptionFlag<number> } {
@@ -239,6 +253,19 @@ export abstract class TeamsCommand<T extends typeof Command> extends Command {
    */
   protected logSafe(message: string): void {
     this.log(stripControl(redactSecrets(message, secretValues())));
+  }
+
+  /** Applies `--clean` to a result before it is rendered or returned; without the flag, returns it as is. */
+  protected cleaned<R>(value: R): R {
+    if (this.rawFlags.clean !== true) return value;
+    const { value: clean, report } = cleanResult(new TeamsGuard(), value);
+    if (report.withheld > 0 || Object.keys(report.redacted).length > 0) this.warn(report.summary);
+    // Under --json the warning is silenced, so the report rides with the result, as it does from
+    // the MCP server.
+    if (typeof clean === 'object' && clean !== null && !Array.isArray(clean)) {
+      return { ...clean, cleaned: report };
+    }
+    return clean;
   }
 
   /** Renders a list result and says plainly whether the limit cut it short. */

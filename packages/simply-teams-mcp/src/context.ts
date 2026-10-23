@@ -22,6 +22,7 @@ import {
   loadEnvFile,
   resolveTeamsConfig,
   type TeamsConfig,
+  TeamsGuard,
   type TokenProvider,
 } from '@simplysf/simply-teams-core';
 
@@ -32,6 +33,12 @@ export interface ServerOptions {
    * `TEAMS_READ_ONLY`, exactly as the CLI refuses it.
    */
   readonly allowWrites?: boolean;
+  /**
+   * Clean what the agent sees (design 0005): a message holding a secret is withheld, and personal
+   * data is replaced with placeholders that are put back when the agent writes. On by default;
+   * `--no-clean` turns it off for a person who wants the raw text.
+   */
+  readonly clean?: boolean;
   /**
    * A `.env` file holding connection settings the host did not set. Loaded once, at startup,
    * with the CLI's precedence: a variable already in the environment wins over the file.
@@ -54,6 +61,8 @@ export interface ServerOptions {
 export interface ToolContext {
   readonly env: EnvLike;
   readonly allowWrites: boolean;
+  /** The guard for this server's lifetime, or undefined when cleaning is off. Its map never leaves memory. */
+  readonly guard: TeamsGuard | undefined;
   config(): TeamsConfig;
   tokens(): TokenProvider;
   graph(): GraphClient;
@@ -80,6 +89,9 @@ export function createContext(options: ServerOptions = {}): ToolContext {
   return {
     env,
     allowWrites: options.allowWrites ?? false,
+    // One guard per server, like one per conversation: a placeholder means the same value in every
+    // result, so the agent can carry "[EMAIL-1]" from a read into a reply.
+    guard: options.clean === false ? undefined : new TeamsGuard(),
     config,
     tokens,
     graph: () => new GraphClient(config(), tokens(), { baseUrl: options.graphBaseUrl }),

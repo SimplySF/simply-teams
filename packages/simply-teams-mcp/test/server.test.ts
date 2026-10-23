@@ -61,6 +61,162 @@ describe('selectTools', () => {
   it('registers only read tools by default', () => {
     expect(selectTools(false).every((tool) => tool.kind === 'read')).toBe(true);
   });
+
+  it('adds the write tools only with --allow-writes', () => {
+    const writes = selectTools(true).filter((tool) => tool.kind === 'write');
+    expect(writes.map((tool) => tool.name)).toStrictEqual([
+      'teams_channel_post',
+      'teams_message_reply',
+      'teams_chat_send',
+    ]);
+  });
+});
+
+describe('cleaning (design 0005)', () => {
+  const chat = '19:chat@thread.v2';
+  const path = `/v1.0/chats/${encodeURIComponent(chat)}/messages`;
+  const aws = ['AKIA', 'IOSFODNN7', 'EXAMPLE'].join('');
+
+  function raw(id: string, html: string): Record<string, unknown> {
+    return {
+      id,
+      messageType: 'message',
+      chatId: chat,
+      createdDateTime: '2026-10-22T14:00:00Z',
+      from: { user: { id: 'u', displayName: 'Ada' } },
+      body: { contentType: 'html', content: html },
+    };
+  }
+
+  it('withholds a message holding a secret and replaces personal data, keeping refs, with a summary', async () => {
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('2', `<p>key ${aws}</p>`), raw('1', '<p>mail jane.doe@example.com</p>')] });
+    });
+
+    const result = await invokeTool(spec('teams_chat_messages'), context(), { chat });
+    const body = payload(result) as { items: Array<{ ref: string; text: string }>; cleaned: { summary: string } };
+
+    expect(body.items.map((item) => item.text)).toStrictEqual([
+      'mail [EMAIL-1]',
+      '[withheld: contains a secret (AWS access key)]',
+    ]);
+    expect(body.items.map((item) => item.ref)).toStrictEqual([`${chat}/1`, `${chat}/2`]);
+    expect(body.cleaned.summary).toBe(
+      'Cleaned: 1 item withheld for holding a secret; 1 email address replaced with placeholders.',
+    );
+    expect(JSON.stringify(result)).not.toContain(aws);
+    expect(JSON.stringify(result)).not.toContain('jane.doe');
+  });
+
+  it('puts the real value back when the agent writes with a placeholder, and cleans the dry run it sees', async () => {
+    const ctx = context();
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('1', '<p>from jane.doe@example.com</p>')] });
+    });
+    await invokeTool(spec('teams_chat_messages'), ctx, { chat });
+
+    const preview = await invokeTool(spec('teams_chat_send'), ctx, { chat, text: 'thanks [EMAIL-1]', dryRun: true });
+    expect(JSON.stringify(payload(preview))).toContain('thanks [EMAIL-1]');
+    expect(JSON.stringify(payload(preview))).not.toContain('jane.doe');
+
+    let sent: unknown;
+    server.route(path, (req, res, body) => {
+      if (req.method === 'POST') {
+        sent = JSON.parse(body) as unknown;
+        respondJson(res, 201, raw('3', '<p>thanks jane.doe@example.com</p>'));
+      } else respondJson(res, 200, { value: [] });
+    });
+    const posted = await invokeTool(spec('teams_chat_send'), ctx, { chat, text: 'thanks [EMAIL-1]' });
+    expect(sent).toMatchObject({ body: { content: 'thanks jane.doe@example.com' } });
+    expect((payload(posted) as { text: string }).text).toBe('thanks [EMAIL-1]');
+  });
+
+  it('cleans an error too, so a restored address cannot come back through it', async () => {
+    const ctx = context();
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('1', '<p>from jane.doe@example.com</p>')] });
+    });
+    await invokeTool(spec('teams_chat_messages'), ctx, { chat });
+    server.route('/v1.0/users/jane.doe%40example.com', (_req, res) => {
+      respondJson(res, 404, {
+        error: { code: 'Request_ResourceNotFound', message: 'no such user jane.doe@example.com' },
+      });
+    });
+    server.route('/v1.0/users', (_req, res) => {
+      respondJson(res, 200, { value: [] });
+    });
+
+    const result = await invokeTool(spec('teams_chat_send'), ctx, { chat, text: 'hi', mentions: ['[EMAIL-1]'] });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('jane.doe');
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringContaining('[EMAIL-1]') });
+  });
+
+  it("passes the sign-in status through, since it is about this session rather than anyone's message", async () => {
+    server.route('/v1.0/me', (_req, res) => {
+      respondJson(res, 200, { id: 'u1', displayName: 'Ada', userPrincipalName: 'ada@contoso.com' });
+    });
+    const result = await invokeTool(spec('teams_auth_status'), context(), {});
+    expect(payload(result)).toMatchObject({ account: 'ada@contoso.com' });
+    expect(payload(result)).not.toHaveProperty('cleaned');
+  });
+
+  it('shows raw text when cleaning is turned off', async () => {
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('1', '<p>mail jane.doe@example.com</p>')] });
+    });
+    const off = createContext({
+      env: { TEAMS_CLIENT_ID: CLIENT },
+      tokens,
+      graphBaseUrl: `${server.baseUrl}/v1.0`,
+      clean: false,
+    });
+    const result = await invokeTool(spec('teams_chat_messages'), off, { chat });
+    expect((payload(result) as { items: Array<{ text: string }> }).items[0]?.text).toBe('mail jane.doe@example.com');
+    expect(payload(result)).not.toHaveProperty('cleaned');
+  });
+});
+
+describe('write tools (design 0004)', () => {
+  const chat = '19:chat@thread.v2';
+  const path = `/v1.0/chats/${encodeURIComponent(chat)}/messages`;
+
+  it('refuses a write under TEAMS_READ_ONLY before any request', async () => {
+    const result = await invokeTool(spec('teams_chat_send'), context({ TEAMS_READ_ONLY: '1' }), { chat, text: 'x' });
+    expect(result.isError).toBe(true);
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringMatching(/TEAMS_READ_ONLY/) });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('returns the planned request under dryRun and sends nothing', async () => {
+    const result = await invokeTool(spec('teams_chat_send'), context(), { chat, text: 'draft', dryRun: true });
+    expect(payload(result)).toMatchObject({ method: 'POST', body: { body: { content: 'draft' } } });
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('sends through the same core operation as the CLI and returns the stored message', async () => {
+    server.route(path, (_req, res) => {
+      respondJson(res, 201, {
+        id: '9',
+        messageType: 'message',
+        chatId: chat,
+        from: { user: { id: 'u', displayName: 'Ada' } },
+        body: { contentType: 'html', content: '<p>sent</p>' },
+      });
+    });
+    const result = await invokeTool(spec('teams_chat_send'), context(), { chat, text: 'sent' });
+    expect(payload(result)).toMatchObject({ ref: `${chat}/9`, text: 'sent' });
+  });
+
+  it('turns a chat message given to reply into a config result naming chat send', async () => {
+    const result = await invokeTool(spec('teams_message_reply'), context(), { message: `${chat}/42`, text: 'x' });
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringMatching(/teams chat send/) });
+  });
+
+  it('cleans every tool that returns what people wrote; only the session status is exempt', () => {
+    expect(TOOLS.filter((tool) => tool.cleans === false).map((tool) => tool.name)).toStrictEqual(['teams_auth_status']);
+  });
 });
 
 describe('invokeTool', () => {

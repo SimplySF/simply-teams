@@ -155,3 +155,25 @@ describe('teams channel list', () => {
     expect(stdout.join('')).toContain(`${TEAM}/19:gen@thread.tacv2`);
   });
 });
+
+describe('--clean (design 0005)', () => {
+  it('withholds a message holding a secret and replaces an email, warning what it did', async () => {
+    const aws = ['AKIA', 'IOSFODNN7', 'EXAMPLE'].join('');
+    nock(GRAPH)
+      .get(`/v1.0/chats/${encodeURIComponent(CHAT)}/messages`)
+      .query(true)
+      .reply(200, { value: [raw('2', `<p>key ${aws}</p>`), raw('1', '<p>mail jane.doe@example.com</p>')] });
+    const warn = vi.spyOn(Command.prototype, 'warn').mockImplementation((input) => input);
+
+    const result = await ChatMessages.run([CHAT, '--clean']);
+
+    expect(result.items.map((item) => item.text)).toStrictEqual([
+      'mail [EMAIL-1]',
+      '[withheld: contains a secret (AWS access key)]',
+    ]);
+    expect(stdout.join('')).not.toContain(aws);
+    expect(stdout.join('')).not.toContain('jane.doe');
+    expect(String(warn.mock.calls[0]?.[0])).toMatch(/1 item withheld/);
+    expect((result as { cleaned?: { withheld: number } }).cleaned).toMatchObject({ withheld: 1 });
+  });
+});

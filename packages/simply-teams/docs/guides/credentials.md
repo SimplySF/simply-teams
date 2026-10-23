@@ -17,14 +17,14 @@ registered app.
 Settings come from environment variables, from flags, or from a `.env` file named with
 `-e/--env-file`. Explicit flags beat the environment, which beats the file's contents.
 
-| Variable               | Flag          | Meaning                                                                           | Default                                      |
-| ---------------------- | ------------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
-| `TEAMS_CLIENT_ID`      | `--client-id` | Application (client) ID of the Entra app registration. A GUID.                    | required, unless `TEAMS_ACCESS_TOKEN` is set |
-| `TEAMS_TENANT_ID`      | `--tenant`    | Tenant GUID or verified domain.                                                   | `organizations`: the account's home tenant   |
-| `TEAMS_CLOUD`          | `--cloud`     | `global`, `usgov-high`, or `dod`. GCC Moderate tenants use `global`.              | `global`                                     |
-| `TEAMS_ACCESS_TOKEN`   | none          | A Microsoft Graph access token used as-is, skipping the broker.                   | unset                                        |
-| `TEAMS_NO_INTERACTIVE` | none          | Never show a sign-in window, even for `auth login`.                               | unset                                        |
-| `TEAMS_READ_ONLY`      | none          | Refuse every write. Nothing writes yet; this is honoured for when something does. | unset                                        |
+| Variable               | Flag          | Meaning                                                                      | Default                                      |
+| ---------------------- | ------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| `TEAMS_CLIENT_ID`      | `--client-id` | Application (client) ID of the Entra app registration. A GUID.               | required, unless `TEAMS_ACCESS_TOKEN` is set |
+| `TEAMS_TENANT_ID`      | `--tenant`    | Tenant GUID or verified domain.                                              | `organizations`: the account's home tenant   |
+| `TEAMS_CLOUD`          | `--cloud`     | `global`, `usgov-high`, or `dod`. GCC Moderate tenants use `global`.         | `global`                                     |
+| `TEAMS_ACCESS_TOKEN`   | none          | A Microsoft Graph access token used as-is, skipping the broker.              | unset                                        |
+| `TEAMS_NO_INTERACTIVE` | none          | Never show a sign-in window, even for `auth login`.                          | unset                                        |
+| `TEAMS_READ_ONLY`      | none          | Refuse every write, before any request. See [Write safety](write-safety.md). | unset                                        |
 
 Only these variables are read from an `--env-file`; anything else in it, such as
 `NODE_TLS_REJECT_UNAUTHORIZED`, is ignored. A variable already set in the environment wins over the
@@ -66,6 +66,12 @@ and still says what is missing, before an administrator has acted.
 | `channel list`                                      | `Channel.ReadBasic.All`                | yes                          |
 | `message search`                                    | `Chat.Read`, `ChannelMessage.Read.All` | **no**                       |
 | `channel messages`, `message view` (channel)        | `ChannelMessage.Read.All`              | **no**                       |
+| `channel post`, `message reply`                     | `ChannelMessage.Send`                  | yes                          |
+| `chat send`                                         | `ChatMessage.Send`                     | yes                          |
+
+The two send scopes are not part of the read set. Only `auth login --allow-writes` asks for them,
+and `auth status` reports them on their own line ("Can post"). See [Write safety](write-safety.md),
+which also explains why writing deserves an app registration of its own.
 
 Until an administrator consents, `chat messages --since 7d` is the way to read a known chat.
 
@@ -79,8 +85,9 @@ request with `interaction_required`.
 simply teams auth login
 ```
 
-`auth login` asks for every scope above at once, so consent happens at this one moment rather than
-in the middle of later work. Usually nothing appears. When the broker needs you (first-time
+`auth login` asks for the read scopes at this one moment rather than in the middle of later work:
+the user-grantable ones interactively, and `ChannelMessage.Read.All` silently, so a missing admin
+consent is a line in the output instead of a dead end. `--allow-writes` adds the two send scopes. Usually nothing appears. When the broker needs you (first-time
 consent, a Conditional Access check), it shows its own account picker. On a joined machine that is
 one click, never a password.
 

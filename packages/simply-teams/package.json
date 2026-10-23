@@ -1,6 +1,6 @@
 {
   "name": "@simplysf/simply-teams",
-  "description": "Command-line interface for searching and reading Microsoft Teams",
+  "description": "Command-line interface for searching, reading, and posting in Microsoft Teams",
   "version": "0.0.0",
   "author": "@ClayChipps",
   "homepage": "https://github.com/SimplySF/simply-teams",
@@ -54,16 +54,16 @@
         "description": "Sign in to Microsoft Teams and check the session."
       },
       "teams:message": {
-        "description": "Search messages and read one in context."
+        "description": "Search messages, read one in context, and reply in a thread."
       },
       "teams:chat": {
-        "description": "List your chats and read their messages."
+        "description": "List your chats, read their messages, and send one."
       },
       "teams:team": {
         "description": "List the teams you belong to."
       },
       "teams:channel": {
-        "description": "List channels and read their posts."
+        "description": "List channels, read their posts, and start a thread."
       }
     }
   },

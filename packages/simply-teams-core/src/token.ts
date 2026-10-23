@@ -86,6 +86,14 @@ export const ADMIN_CONSENT_SCOPES = ['ChannelMessage.Read.All'] as const;
 export const READ_SCOPES = [...USER_CONSENT_SCOPES, ...ADMIN_CONSENT_SCOPES] as const;
 
 /**
+ * The scopes the write commands need (design 0004). A user can grant both. They are kept out of
+ * {@link READ_SCOPES} on purpose: the broker hands out every scope ever consented to a client ID,
+ * so asking for them is a separate, deliberate step (`auth login --allow-writes`), and the read
+ * status never reports them missing.
+ */
+export const WRITE_SCOPES = ['ChannelMessage.Send', 'ChatMessage.Send'] as const;
+
+/**
  * Broader grants that cover a read scope, so a token holding the wider one is not reported
  * short. Deliberately conservative: reporting a scope missing when it would have worked costs a
  * confused look, while reporting it present when it is not hides the reason a call fails.
