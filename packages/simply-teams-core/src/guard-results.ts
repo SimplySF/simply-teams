@@ -106,6 +106,9 @@ class Cleaner {
         );
       } else if (IDENTIFIERS.has(key)) {
         out[key] = item;
+      } else if (FREE_TEXT.has(key) && typeof item === 'string') {
+        // Already known to hold no secret: only personal data is left to replace.
+        out[key] = this.guard.redact(item, this.redacted);
       } else {
         out[key] = this.clean(item);
       }
@@ -137,7 +140,8 @@ function secretsInItem(object: Record<string, Json>): string[] {
       if (typeof name === 'string') texts.push(name);
     }
   }
-  return texts.length === 0 ? [] : secretsIn(texts.join('\n'));
+  // Each field on its own: an assignment-style pattern must not run from one field into the next.
+  return texts.flatMap((text) => secretsIn(text));
 }
 
 function plural(count: number, noun: string): string {

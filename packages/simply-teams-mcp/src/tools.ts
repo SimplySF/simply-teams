@@ -24,6 +24,7 @@ import {
   MAX_CONTEXT,
   parseDate,
   parseRef,
+  parseReplyRef,
   planChannelPost,
   planChannelReply,
   planChatSend,
@@ -49,6 +50,11 @@ export interface ToolSpec {
   /** The CLI command this tool is the equivalent of, e.g. `['teams', 'auth', 'status']`. */
   readonly command: readonly string[];
   readonly kind: ToolKind;
+  /**
+   * False for a tool whose result is about this session rather than something people wrote, so
+   * the server returns it as the CLI prints it instead of cleaning it (design 0005).
+   */
+  readonly cleans?: boolean;
   readonly inputSchema: z.ZodRawShape;
   /** Runs the tool and returns what the CLI would print under `--json`. */
   readonly run: (context: ToolContext, input: Readonly<Record<string, unknown>>) => Promise<unknown>;
@@ -119,6 +125,7 @@ export const TOOLS: readonly ToolSpec[] = [
       'asking them to run "simply teams auth login" in a terminal, which this server cannot do for them.',
     command: ['teams', 'auth', 'status'],
     kind: 'read',
+    cleans: false,
     inputSchema: {},
     run: (ctx) => authStatus(ctx.config(), ctx.tokens(), ctx.graph()),
   }),
@@ -291,7 +298,7 @@ export const TOOLS: readonly ToolSpec[] = [
       ...MESSAGE_SHAPE,
     },
     run: async (ctx, input) => {
-      const planned = await planChannelReply(ctx.graph(), parseRef(input.message, ['channelMessage']), input);
+      const planned = await planChannelReply(ctx.graph(), parseReplyRef(input.message), input);
       return deliver(ctx, planned, input.dryRun);
     },
   }),

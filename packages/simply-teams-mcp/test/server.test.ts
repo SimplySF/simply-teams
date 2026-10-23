@@ -209,9 +209,13 @@ describe('write tools (design 0004)', () => {
     expect(payload(result)).toMatchObject({ ref: `${chat}/9`, text: 'sent' });
   });
 
-  it('turns a chat message given to reply into a config result', async () => {
+  it('turns a chat message given to reply into a config result naming chat send', async () => {
     const result = await invokeTool(spec('teams_message_reply'), context(), { message: `${chat}/42`, text: 'x' });
-    expect(payload(result)).toMatchObject({ code: 'config' });
+    expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringMatching(/teams chat send/) });
+  });
+
+  it('cleans every tool that returns what people wrote; only the session status is exempt', () => {
+    expect(TOOLS.filter((tool) => tool.cleans === false).map((tool) => tool.name)).toStrictEqual(['teams_auth_status']);
   });
 });
 

@@ -175,6 +175,15 @@ describe('cleanResult', () => {
     expect(JSON.stringify(value)).not.toContain(aws);
   });
 
+  it('scans each field on its own, so a pattern cannot run from the subject into the text', () => {
+    const { value, report } = cleanResult(
+      new TeamsGuard(),
+      message('10', 'see-the-wiki-page', { subject: 'API_KEY =' }),
+    );
+    expect(report.withheld).toBe(0);
+    expect(value.text).toBe('see-the-wiki-page');
+  });
+
   it('counts a message that appears twice in a view once', () => {
     const secret = message('8', `key ${aws}`);
     const { value, report } = cleanResult(new TeamsGuard(), {

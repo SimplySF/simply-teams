@@ -143,7 +143,7 @@ export async function invokeTool(
     const { guard } = context;
     // Cleaning (design 0005) covers Teams content. The sign-in status is about this session, not
     // something anyone wrote, so it is passed through as the CLI prints it.
-    if (guard === undefined || spec.name === 'teams_auth_status') {
+    if (guard === undefined || spec.cleans === false) {
       const result = await spec.run(context, input);
       return { content: [{ type: 'text', text: JSON.stringify(result ?? null) }] };
     }

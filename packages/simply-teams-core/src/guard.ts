@@ -172,14 +172,13 @@ export class TeamsGuard {
 
   /**
    * Replaces personal data with placeholders, counting each kind into `tally`. A value already
-   * seen gets the placeholder it had; a placeholder is never replaced again.
+   * seen gets the placeholder it had. No detector can match a placeholder, so one is never replaced.
    */
   public redact(text: string, tally: Record<string, number> = {}): string {
     let out = text;
     for (const detector of DETECTORS) {
       if (detector.kind !== 'personal') continue;
       out = out.replaceAll(detector.pattern, (match: string) => {
-        if (/^\[[A-Z_]+-\d+\]$/.test(match)) return match;
         if (detector.confirm !== undefined && !detector.confirm(match, [match])) return match;
         tally[detector.type] = (tally[detector.type] ?? 0) + 1;
         return this.placeholderFor(detector.type, match);
