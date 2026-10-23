@@ -28,7 +28,13 @@ import {
   type TeamsMessage,
   type TeamsSearchHit,
 } from './messages.js';
-import { buildMessageBody, type MentionTarget, type MessageBody, type MessageInput } from './message-body.js';
+import {
+  buildMessageBody,
+  type MentionTarget,
+  type MessageBody,
+  type MessageInput,
+  validateMessageInput,
+} from './message-body.js';
 import type { Selector, TeamsRef } from './refs.js';
 import { stripControlOneLine } from './text.js';
 
@@ -464,6 +470,33 @@ export interface WriteInput extends MessageInput {
   readonly mentions?: readonly string[];
 }
 
+interface GraphUserRef {
+  readonly id: string;
+  readonly displayName?: string | null;
+}
+
+/**
+ * One person, by user ID, UPN, or email address. `GET /users/{x}` takes an ID or a UPN only; an
+ * address that is a mail alias, or a guest (whose UPN is `name_domain#EXT#@tenant`), is found by
+ * filtering on `mail` instead. Nothing found is a `ConfigError` naming what was asked for.
+ */
+async function findUser(graph: GraphClient, wanted: string): Promise<GraphUserRef> {
+  const select = { $select: ['id', 'displayName'] };
+  try {
+    return await graph.get<GraphUserRef>(`/users/${encode(wanted)}`, SCOPES.users, select);
+  } catch (error) {
+    if (!(error instanceof HttpError && error.status === 404) || !wanted.includes('@')) throw error;
+  }
+  const byMail = await graph.get<{ value?: readonly GraphUserRef[] }>('/users', SCOPES.users, {
+    ...select,
+    // OData quotes a string with single quotes, doubled to escape.
+    $filter: `mail eq '${wanted.replaceAll("'", "''")}'`,
+  });
+  const found = byMail.value?.[0];
+  if (found === undefined) throw new ConfigError(`No user found for the mention "${wanted}".`);
+  return found;
+}
+
 /**
  * Resolves each mention to a Graph user, so the message can link them. Takes an email address,
  * a UPN, or a user ID; one that matches no user is a `ConfigError` naming it, before anything is
@@ -476,17 +509,8 @@ export async function resolveMentions(graph: GraphClient, people: readonly strin
   for (const person of people) {
     const wanted = person.trim();
     if (wanted === '') continue;
-    try {
-      const user = await graph.get<{ id: string; displayName?: string }>(`/users/${encode(wanted)}`, SCOPES.users, {
-        $select: ['id', 'displayName'],
-      });
-      resolved.push({ id: user.id, name: clean(user.displayName) ?? wanted });
-    } catch (error) {
-      if (error instanceof HttpError && error.status === 404) {
-        throw new ConfigError(`No user found for the mention "${wanted}".`);
-      }
-      throw error;
-    }
+    const user = await findUser(graph, wanted);
+    resolved.push({ id: user.id, name: clean(user.displayName) ?? wanted });
   }
   /* eslint-enable no-await-in-loop */
   return resolved;
@@ -498,8 +522,8 @@ async function plan(
   input: WriteInput,
   scopes: readonly string[],
 ): Promise<PlannedWrite> {
-  // Built before any lookup, so an empty message fails without a request.
-  buildMessageBody(input);
+  // Checked before any lookup, so an empty message fails without a request.
+  validateMessageInput(input);
   const mentions = await resolveMentions(graph, input.mentions ?? []);
   return { method: 'POST', path, body: buildMessageBody(input, mentions), scopes };
 }

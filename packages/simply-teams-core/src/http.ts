@@ -150,8 +150,18 @@ export class HttpTransport {
     /* eslint-disable no-await-in-loop */
     for (let attempt = 1; ; attempt += 1) {
       let outcome: AttemptOutcome<T>;
+      let token: string;
       try {
-        const { token } = await this.target.tokens.getToken({ forceRefresh: refreshed, scopes: call.scopes });
+        ({ token } = await this.target.tokens.getToken({ forceRefresh: refreshed, scopes: call.scopes }));
+      } catch (error) {
+        // Nothing has been sent yet, so even a write may try again: the "may have been posted"
+        // wording would send someone to check Teams for a duplicate that cannot exist.
+        const verdict = this.triage(error, { ...call, mutating: false }, url, attempt);
+        if (verdict !== TRANSIENT) throw verdict;
+        await delay(BACKOFF_BASE_MS * 2 ** (attempt - 1));
+        continue;
+      }
+      try {
         outcome = await this.attempt<T>(url, call, token);
       } catch (error) {
         const verdict = this.triage(error, call, url, attempt);

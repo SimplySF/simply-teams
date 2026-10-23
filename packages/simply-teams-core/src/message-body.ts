@@ -58,13 +58,8 @@ export function textToHtml(text: string): string {
   return escapeHtml(text).replaceAll(/\r?\n/g, '<br>');
 }
 
-/**
- * Builds a message body. Plain text is escaped, so `<b>` in it is shown rather than obeyed; HTML
- * is sent as given, for callers that want formatting. Mentions are placed at the start, each as
- * `@Name`, because Graph needs every `mentions[]` entry to appear in the content and a caller
- * cannot be expected to know the `<at id>` markup.
- */
-export function buildMessageBody(input: MessageInput, mentions: readonly MentionTarget[] = []): MessageBody {
+/** Checks a message is given exactly once, as text or as HTML; returns whether it is text. */
+export function validateMessageInput(input: MessageInput): boolean {
   const hasText = input.text !== undefined && input.text.trim() !== '';
   const hasHtml = input.html !== undefined && input.html.trim() !== '';
   if (hasText === hasHtml) {
@@ -72,6 +67,17 @@ export function buildMessageBody(input: MessageInput, mentions: readonly Mention
       hasText ? 'Give the message as text or as HTML, not both.' : 'The message is empty: give it some text.',
     );
   }
+  return hasText;
+}
+
+/**
+ * Builds a message body. Plain text is escaped, so `<b>` in it is shown rather than obeyed; HTML
+ * is sent as given, for callers that want formatting. Mentions are placed at the start, each as
+ * `@Name`, because Graph needs every `mentions[]` entry to appear in the content and a caller
+ * cannot be expected to know the `<at id>` markup.
+ */
+export function buildMessageBody(input: MessageInput, mentions: readonly MentionTarget[] = []): MessageBody {
+  const hasText = validateMessageInput(input);
   const content = hasText ? textToHtml(input.text ?? '') : (input.html ?? '');
   const tags = mentions.map((person, index) => `<at id="${index}">${escapeHtml(person.name)}</at>`);
   return {

@@ -90,6 +90,7 @@ describe('@simplysf/simply-teams-core', () => {
         'buildMessageBody',
         'escapeHtml',
         'textToHtml',
+        'validateMessageInput',
         // operations
         'adminConsentUrl',
         'authStatus',

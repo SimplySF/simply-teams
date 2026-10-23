@@ -266,6 +266,16 @@ describe('writes (design 0004)', () => {
     expect(calls).toBe(2);
   });
 
+  it('does not say a write may have been posted when getting the token failed, since nothing was sent', async () => {
+    const broken: TokenProvider = { getToken: () => Promise.reject(new Error('broker unavailable')) };
+    const error = await transport({ tokens: broken, maxAttempts: 1 })
+      .json({ method: 'POST', path: '/chats/x/messages', body: {}, mutating: true })
+      .catch((caught: unknown) => caught);
+    expect((error as Error).message).toContain('broker unavailable');
+    expect((error as Error).message).not.toContain('may have been posted');
+    expect(server.requests).toHaveLength(0);
+  });
+
   it('keeps retrying a 5xx on a POST that reads, such as search', async () => {
     let calls = 0;
     server.route('/v1.0/search/query', (_req, res) => {

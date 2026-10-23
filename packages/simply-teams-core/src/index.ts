@@ -105,6 +105,7 @@ export {
   type MentionTarget,
   type MessageBody,
   type MessageInput,
+  validateMessageInput,
 } from './message-body.js';
 
 // --- Operations: what each command does between parsing its input and rendering its result ---

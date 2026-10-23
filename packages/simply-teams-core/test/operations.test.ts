@@ -320,6 +320,9 @@ describe('writes (design 0004)', () => {
     server.route('/v1.0/users/nobody%40example.test', (_req, res) => {
       respondJson(res, 404, { error: { code: 'Request_ResourceNotFound' } });
     });
+    server.route('/v1.0/users', (_req, res) => {
+      respondJson(res, 200, { value: [] });
+    });
 
     const planned = await planChatSend(graph(), CHAT, { text: 'see this', mentions: ['ada@example.test'] });
     expect(planned.body.body.content).toBe('<at id="0">Ada</at> see this');
@@ -328,6 +331,21 @@ describe('writes (design 0004)', () => {
     await expect(planChatSend(graph(), CHAT, { text: 'x', mentions: ['nobody@example.test'] })).rejects.toThrow(
       /No user found for the mention "nobody@example.test"/,
     );
+  });
+
+  it('finds a mention by mail when the address is not a UPN, as for an alias or a guest', async () => {
+    server.route('/v1.0/users/ada.lovelace%40contoso.com', (_req, res) => {
+      respondJson(res, 404, { error: { code: 'Request_ResourceNotFound' } });
+    });
+    let filter: string | null = null;
+    server.route('/v1.0/users', (req, res) => {
+      filter = new URL(req.url ?? '', server.baseUrl).searchParams.get('$filter');
+      respondJson(res, 200, { value: [{ id: 'u-alias', displayName: "Ada O'Lovelace" }] });
+    });
+
+    const planned = await planChatSend(graph(), CHAT, { text: 'hi', mentions: ['ada.lovelace@contoso.com'] });
+    expect(filter).toBe("mail eq 'ada.lovelace@contoso.com'");
+    expect(planned.body.mentions?.[0]?.mentioned.user.id).toBe('u-alias');
   });
 
   it('refuses an empty message before making any request', async () => {
