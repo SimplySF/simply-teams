@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 
-import { AuthError, ConfigError } from './errors.js';
+import { AuthError, ConfigError, HttpError } from './errors.js';
 import type { GraphClient } from './graph-client.js';
 import type { SearchFilters } from './kql.js';
-import type { ChannelLocation, TeamsMessage, TeamsSearchHit } from './messages.js';
+import {
+  type ChannelLocation,
+  type GraphChat,
+  normalizeChat,
+  type TeamsMessage,
+  type TeamsSearchHit,
+} from './messages.js';
 import { listChannels, listTeams, MAX_CONTEXT, SCOPES, searchMessages, viewMessage } from './operations.js';
 import { parseRef, type TeamsRef } from './refs.js';
-import { stripControlOneLine } from './text.js';
 
 /** How a context call is bounded (design 0006). */
 export interface ContextOptions {
@@ -72,6 +77,9 @@ export interface MessageContext {
   readonly truncated: boolean;
 }
 
+/** Less room than this fits no message worth returning, so reading stops there. */
+const MIN_ROOM = 64;
+
 /** Hits are read five per thread wanted, so a thread with several hits still leaves room for others. */
 const HITS_PER_THREAD = 5;
 const MAX_HITS = 50;
@@ -90,21 +98,24 @@ function threadKey(ref: Extract<TeamsRef, { kind: 'chatMessage' | 'channelMessag
     : `channel:${ref.teamId}/${ref.channelId}/${ref.rootId ?? ref.messageId}`;
 }
 
-function groupHits(hits: readonly TeamsSearchHit[]): Group[] {
+/** Groups hits by thread, in the order their first hit came back; hits with no readable ref are counted. */
+function groupHits(hits: readonly TeamsSearchHit[]): { groups: Group[]; unreadable: number } {
   const groups = new Map<string, Group>();
+  let unreadable = 0;
   for (const hit of hits) {
     let ref: Extract<TeamsRef, { kind: 'chatMessage' | 'channelMessage' }>;
     try {
       ref = parseRef(hit.ref, ['chatMessage', 'channelMessage']);
     } catch {
-      continue; // A hit without a usable ref cannot be read; search's own output still lists it.
+      unreadable += 1; // Search's own output still lists it; it cannot be read as a thread.
+      continue;
     }
     const key = threadKey(ref);
     const group = groups.get(key);
     if (group === undefined) groups.set(key, { key, first: hit, ref, ids: [hit.id] });
     else group.ids.push(hit.id);
   }
-  return [...groups.values()];
+  return { groups: [...groups.values()], unreadable };
 }
 
 /** Names teams, channels and chats once per run; a failed lookup names nothing rather than failing the call. */
@@ -126,13 +137,12 @@ class Namer {
     let named = this.chats.get(chatId);
     if (named === undefined) {
       named = this.graph
-        .get<{ topic?: string | null; chatType?: string }>(`/chats/${encodeURIComponent(chatId)}`, SCOPES.chats, {
-          $select: ['topic', 'chatType'],
-        })
-        .then((chat) => {
-          const topic = chat.topic === null || chat.topic === undefined || chat.topic === '' ? undefined : chat.topic;
-          const label = topic ?? chat.chatType;
-          return label === undefined ? undefined : `${stripControlOneLine(label)} chat`;
+        .get<GraphChat>(`/chats/${encodeURIComponent(chatId)}`, SCOPES.chats, { $select: ['id', 'topic', 'chatType'] })
+        .then((raw) => {
+          // The same labelling the chat list uses, including its fix for Graph's meeting-chat placeholder.
+          const chat = normalizeChat(raw);
+          const label = chat.topic ?? chat.type;
+          return label === undefined ? undefined : `${label} chat`;
         })
         .catch(() => undefined);
       this.chats.set(chatId, named);
@@ -187,6 +197,8 @@ function trimToFit(
     if (dropped !== undefined) total -= size(dropped);
     truncated = true;
   }
+  // A thread whose hits were not in the window that was read trims down to nothing: skip it.
+  if (kept.length === 0) return undefined;
   return { kept, truncated };
 }
 
@@ -195,12 +207,7 @@ function trimToFit(
  * read each thread around its hit, and return them in relevance order within a budget. Threads are
  * read one at a time, because Graph throttles chat and channel reads per app and tenant.
  */
-export async function gatherMessageContext(
-  graph: GraphClient,
-  text: string,
-  filters: SearchFilters,
-  options: ContextOptions,
-): Promise<MessageContext> {
+function checkOptions(options: ContextOptions): void {
   if (!Number.isInteger(options.threads) || options.threads < 1 || options.threads > MAX_THREADS) {
     throw new ConfigError(`Threads must be a whole number from 1 to ${MAX_THREADS}.`);
   }
@@ -210,32 +217,63 @@ export async function gatherMessageContext(
   if (!Number.isInteger(options.maxChars) || options.maxChars < 1) {
     throw new ConfigError('The character budget must be a positive whole number.');
   }
+}
+
+/** Reads one thread, or nothing when it cannot be read: a meeting chat the user has left (403), a message deleted since it was indexed (404). */
+async function readThread(
+  graph: GraphClient,
+  group: Group,
+  context: number,
+): Promise<{ messages: TeamsMessage[]; warnings: readonly string[] } | undefined> {
+  try {
+    const view = await viewMessage(graph, group.ref, context);
+    return { messages: view.thread.length === 0 ? [view.message] : [...view.thread], warnings: view.warnings };
+  } catch (error) {
+    if ((error instanceof AuthError && error.status === 403) || error instanceof HttpError) return undefined;
+    throw error;
+  }
+}
+
+function describeGroup(group: Group, namer: Namer): Promise<string | undefined> {
+  return group.ref.kind === 'chatMessage'
+    ? namer.chat(group.ref.chatId)
+    : namer.channel({ teamId: group.ref.teamId, channelId: group.ref.channelId });
+}
+
+export async function gatherMessageContext(
+  graph: GraphClient,
+  text: string,
+  filters: SearchFilters,
+  options: ContextOptions,
+): Promise<MessageContext> {
+  checkOptions(options);
 
   const search = await searchMessages(graph, text, filters, Math.min(MAX_HITS, options.threads * HITS_PER_THREAD));
-  const groups = groupHits(search.items);
+  const { groups, unreadable } = groupHits(search.items);
   const namer = new Namer(graph);
   const threads: ContextThread[] = [];
-  let skipped = Math.max(0, groups.length - options.threads);
+  const wanted = groups.slice(0, options.threads);
+  let skipped = unreadable + (groups.length - wanted.length);
   let used = 0;
   let truncated = false;
 
   /* One thread at a time: fanning out would trip Graph's per-app throttling on a busy tenant. */
   /* eslint-disable no-await-in-loop */
-  for (const group of groups.slice(0, options.threads)) {
-    let view;
-    try {
-      view = await viewMessage(graph, group.ref, options.context);
-    } catch (error) {
-      // A chat the user can list but no longer read (0002) should not fail every other thread.
-      if (error instanceof AuthError && error.status === 403) {
-        skipped += 1;
-        continue;
-      }
-      throw error;
+  for (const [index, group] of wanted.entries()) {
+    if (options.maxChars - used < MIN_ROOM) {
+      // Nothing more fits, so nothing more is read.
+      skipped += wanted.length - index;
+      truncated = true;
+      break;
     }
-    const messages = view.thread.length === 0 ? [view.message] : view.thread;
+    const view = await readThread(graph, group, options.context);
+    if (view === undefined) {
+      // One unreadable thread must not cost the agent every other thread.
+      skipped += 1;
+      continue;
+    }
     const hitIds = new Set(group.ids);
-    const fit = trimToFit(messages, hitIds, options.maxChars - used);
+    const fit = trimToFit(view.messages, hitIds, options.maxChars - used);
     if (fit === undefined) {
       skipped += 1;
       truncated = true;
@@ -243,15 +281,10 @@ export async function gatherMessageContext(
     }
     used += fit.kept.reduce((sum, message) => sum + size(message), 0);
     truncated = truncated || fit.truncated;
-    const kind = group.ref.kind === 'chatMessage' ? 'chat' : 'channel';
-    const where =
-      group.ref.kind === 'chatMessage'
-        ? await namer.chat(group.ref.chatId)
-        : await namer.channel({ teamId: group.ref.teamId, channelId: group.ref.channelId });
     threads.push({
       ref: group.first.ref,
-      kind,
-      where,
+      kind: group.ref.kind === 'chatMessage' ? 'chat' : 'channel',
+      where: await describeGroup(group, namer),
       chatId: group.ref.kind === 'chatMessage' ? group.ref.chatId : undefined,
       channel:
         group.ref.kind === 'channelMessage' ? { teamId: group.ref.teamId, channelId: group.ref.channelId } : undefined,

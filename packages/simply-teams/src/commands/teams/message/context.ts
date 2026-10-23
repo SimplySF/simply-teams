@@ -23,10 +23,10 @@ import {
   MAX_CONTEXT,
   MAX_THREADS,
   type MessageContext,
-  parseDate,
 } from '@simplysf/simply-teams-core';
 import { cleanFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderThread } from '../../../shared/message-output.js';
+import { searchFilterFlags, searchFiltersFrom } from '../../../shared/search-flags.js';
 
 export default class MessageContextCommand extends TeamsCommand<typeof MessageContextCommand> {
   public static override readonly summary =
@@ -56,10 +56,7 @@ export default class MessageContextCommand extends TeamsCommand<typeof MessageCo
 
   public static override readonly flags = {
     ...cleanFlag,
-    from: Flags.string({ summary: 'Only messages from this person: a name or email address.' }),
-    since: Flags.string({ summary: 'Only messages sent on or after this date: YYYY-MM-DD, or relative like 7d.' }),
-    until: Flags.string({ summary: 'Only messages sent on or before this date.' }),
-    'mentions-me': Flags.boolean({ summary: 'Only messages that @mention you.', default: false }),
+    ...searchFilterFlags,
     threads: Flags.integer({
       summary: 'How many threads to read, in relevance order.',
       default: DEFAULT_THREADS,
@@ -82,17 +79,11 @@ export default class MessageContextCommand extends TeamsCommand<typeof MessageCo
   public async run(): Promise<MessageContext> {
     const { flags } = this;
     const result = this.cleaned(
-      await gatherMessageContext(
-        this.graph(),
-        this.args.query ?? '',
-        {
-          from: flags.from,
-          since: flags.since === undefined ? undefined : parseDate(flags.since),
-          until: flags.until === undefined ? undefined : parseDate(flags.until),
-          mentionsMe: flags['mentions-me'],
-        },
-        { threads: flags.threads, context: flags.context, maxChars: flags['max-chars'] },
-      ),
+      await gatherMessageContext(this.graph(), this.args.query ?? '', searchFiltersFrom(flags), {
+        threads: flags.threads,
+        context: flags.context,
+        maxChars: flags['max-chars'],
+      }),
     );
     if (result.threads.length === 0) {
       this.log(result.searched === 0 ? `No messages match: ${result.query}` : 'No thread could be read.');
