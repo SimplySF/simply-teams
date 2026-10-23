@@ -39,6 +39,7 @@ refactors that keep the public surface identical (though a short doc is welcome 
 | 0003 | [Signing in before an administrator has consented](0003-consent-without-admin.md)                               | Implemented |
 | 0004 | [Writes: posting, replying, and sending in a chat](0004-writes.md)                                              | Implemented |
 | 0005 | [Cleaning what an agent sees: secrets withheld, personal data placeholdered](0005-cleaning-before-the-agent.md) | Implemented |
+| 0006 | [Message context: the threads behind a question, in one call](0006-message-context.md)                          | Implemented |
 
 ## Template
 

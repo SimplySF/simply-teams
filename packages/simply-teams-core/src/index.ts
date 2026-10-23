@@ -78,6 +78,17 @@ export { stripControl, stripControlOneLine } from './text.js';
 export { assertWritesAllowed, isReadOnly, READ_ONLY_ENV } from './write-safety.js';
 export { collectSecrets, redactSecrets, sanitiseDeep, SECRET_ENV, secretValues } from './redaction.js';
 
+export {
+  DEFAULT_CONTEXT,
+  DEFAULT_MAX_CHARS,
+  DEFAULT_THREADS,
+  gatherMessageContext,
+  MAX_THREADS,
+  type ContextOptions,
+  type ContextThread,
+  type MessageContext,
+} from './message-context.js';
+
 // --- Cleaning what an agent sees (design 0005) ---
 export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
 export { cleanResult, rehideDeep, restoreInput, type GuardReport } from './guard-results.js';

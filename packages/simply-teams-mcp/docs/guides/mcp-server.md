@@ -190,6 +190,7 @@ will not work until a tenant administrator consents to it for the app registrati
 | `teams_auth_status`      | read          | `teams auth status`      | Account, tenant, cloud, token source and expiry, missing read and write scopes |
 | `teams_message_search`   | read          | `teams message search`   | Hits with a highlighted summary and a `ref`                                    |
 | `teams_message_view`     | read          | `teams message view`     | One message, with context around it when asked                                 |
+| `teams_message_context`  | read          | `teams message context`  | The threads behind a question: search, then each matching thread, in one call  |
 | `teams_chat_list`        | read          | `teams chat list`        | Chats with their last message preview                                          |
 | `teams_chat_messages`    | read          | `teams chat messages`    | A chat's messages, oldest first                                                |
 | `teams_team_list`        | read          | `teams team list`        | Joined teams                                                                   |

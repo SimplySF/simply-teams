@@ -69,6 +69,12 @@ describe('@simplysf/simply-teams-core', () => {
         'redactSecrets',
         'sanitiseDeep',
         'secretValues',
+        // message context (design 0006)
+        'DEFAULT_CONTEXT',
+        'DEFAULT_MAX_CHARS',
+        'DEFAULT_THREADS',
+        'MAX_THREADS',
+        'gatherMessageContext',
         // cleaning
         'DETECTOR_TYPES',
         'TeamsGuard',
