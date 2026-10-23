@@ -57,6 +57,7 @@ that client's configuration. See the MCP server guide for the details.
 | `teams_auth_status`      | Who the server is signed in as, which cloud and tenant, and which scopes are missing |
 | `teams_message_search`   | Search messages; hits carry a `ref` to fetch the full message                        |
 | `teams_message_view`     | One message, optionally with the messages around it                                  |
+| `teams_message_context`  | Search, then read the matching threads in one call, within a character budget        |
 | `teams_chat_list`        | Your chats, most recent first                                                        |
 | `teams_chat_messages`    | A chat's recent messages                                                             |
 | `teams_team_list`        | The teams you belong to                                                              |

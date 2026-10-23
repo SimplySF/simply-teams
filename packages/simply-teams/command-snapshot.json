@@ -76,6 +76,28 @@
   },
   {
     "alias": [],
+    "command": "teams:message:context",
+    "flagAliases": [],
+    "flagChars": ["e"],
+    "flags": [
+      "clean",
+      "client-id",
+      "cloud",
+      "context",
+      "env-file",
+      "from",
+      "json",
+      "max-chars",
+      "mentions-me",
+      "since",
+      "tenant",
+      "threads",
+      "until"
+    ],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
     "command": "teams:message:reply",
     "flagAliases": [],
     "flagChars": ["e"],
