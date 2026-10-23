@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-import { Args, Flags } from '@oclif/core';
-import { parseDate, searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
+import { Args } from '@oclif/core';
+import { searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
 import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderHit } from '../../../shared/message-output.js';
+import { searchFilterFlags, searchFiltersFrom } from '../../../shared/search-flags.js';
 
 export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
   public static override readonly summary = 'Search the chat and channel messages you can see.';
@@ -51,27 +52,14 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
 
   public static override readonly flags = {
     ...cleanFlag,
-    from: Flags.string({ summary: 'Only messages from this person: a name or email address.' }),
-    since: Flags.string({ summary: 'Only messages sent on or after this date: YYYY-MM-DD, or relative like 7d.' }),
-    until: Flags.string({ summary: 'Only messages sent on or before this date.' }),
-    'mentions-me': Flags.boolean({ summary: 'Only messages that @mention you.', default: false }),
+    ...searchFilterFlags,
     ...limitFlag(25, 'results'),
   };
 
   public async run(): Promise<SearchResult> {
     const { flags } = this;
     const result = this.cleaned(
-      await searchMessages(
-        this.graph(),
-        this.args.query ?? '',
-        {
-          from: flags.from,
-          since: flags.since === undefined ? undefined : parseDate(flags.since),
-          until: flags.until === undefined ? undefined : parseDate(flags.until),
-          mentionsMe: flags['mentions-me'],
-        },
-        flags.limit,
-      ),
+      await searchMessages(this.graph(), this.args.query ?? '', searchFiltersFrom(flags), flags.limit),
     );
     if (result.items.length === 0) this.log(`No messages match: ${result.query}`);
     else this.logSafe(result.items.map(renderHit).join('\n\n'));

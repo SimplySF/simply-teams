@@ -143,8 +143,8 @@ describe('gatherMessageContext (design 0006)', () => {
     expect(result.threads[1]?.messages.map((message) => message.id)).toStrictEqual(['7', '8', '9']);
     expect(result.skipped).toBe(0);
     expect(result.truncated).toBe(false);
-    // The channel thread was read once (the hit, its root, the replies), not once per hit.
-    expect(server.requests.filter((request) => request.url.startsWith(`${channelBase}/100`))).toHaveLength(3);
+    // The channel thread was read once (its root and replies), not once per hit, and the hit came from it.
+    expect(server.requests.filter((request) => request.url.startsWith(`${channelBase}/100`))).toHaveLength(2);
     const scopes = requested.flatMap((request) => request.scopes ?? []);
     expect(scopes).toContain('ChannelMessage.Read.All');
     expect(scopes).toContain('Chat.Read');
@@ -185,6 +185,37 @@ describe('gatherMessageContext (design 0006)', () => {
     routeChannelThread('100', []);
     const result = await gatherMessageContext(graph(), 'x', {}, { threads: 1, context: 0, maxChars: 24_000 });
     expect(result.threads[0]?.where).toBeUndefined();
+  });
+
+  it('counts a hit it cannot read as a thread as skipped, so the totals add up', async () => {
+    routeSearch([hit('100', 'one', 'channel'), { hitId: 'x', summary: 'no ids', resource: { id: '123' } }]);
+    routeChannelThread('100', []);
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 5, context: 0, maxChars: 24_000 });
+    expect(result.searched).toBe(2);
+    expect(result.threads).toHaveLength(1);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('skips a thread whose message was deleted since it was indexed, rather than failing the call', async () => {
+    routeSearch([hit('900', 'gone', 'channel'), hit('100', 'fine', 'channel')]);
+    server.route(`${channelBase}/900`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    server.route(`${channelBase}/900/replies`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    routeChannelThread('100', []);
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 5, context: 2, maxChars: 24_000 });
+    expect(result.threads.map((thread) => thread.messages[0]?.id)).toStrictEqual(['100']);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('stops reading once the budget is spent', async () => {
+    routeSearch([hit('100', 'one', 'channel'), hit('200', 'two', 'channel'), hit('300', 'three', 'channel')]);
+    routeChannelThread('100', ['101', '102']);
+    routeChannelThread('200', []);
+    routeChannelThread('300', []);
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 3, context: 5, maxChars: 150 });
+    expect(result.threads).toHaveLength(1);
+    expect(result.skipped).toBe(2);
+    expect(result.truncated).toBe(true);
+    expect(server.requests.some((request) => request.url.includes('/messages/200'))).toBe(false);
   });
 
   it('refuses out-of-range options before searching', async () => {

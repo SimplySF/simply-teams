@@ -32,7 +32,7 @@ export interface GuardReport {
  * its free text, not just the matched part, so an agent never sees the rest of a message that was
  * sharing a credential (design 0005).
  */
-const FREE_TEXT = new Set(['text', 'subject', 'summary', 'topic', 'preview', 'description']);
+const FREE_TEXT = new Set(['text', 'subject', 'summary', 'topic', 'preview', 'description', 'where']);
 
 /**
  * Identifiers and machine values: never personal data, and rewriting them would break the refs an
@@ -58,6 +58,7 @@ const IDENTIFIERS = new Set([
   'path',
   'contentType',
   'userIdentityType',
+  'hitIds',
 ]);
 
 function withheldNote(types: readonly string[]): string {
@@ -82,11 +83,12 @@ class Cleaner {
   }
 
   private cleanObject(object: Record<string, Json>): Record<string, Json> {
-    const ref = typeof object.ref === 'string' ? object.ref : undefined;
-    const already = ref === undefined ? undefined : this.seen.get(ref);
+    // A thread and its first message share a ref (0006), so the shape is part of the key.
+    const key = typeof object.ref === 'string' ? `${object.ref}#${Object.keys(object).sort().join(',')}` : undefined;
+    const already = key === undefined ? undefined : this.seen.get(key);
     if (already !== undefined) return already;
     const cleaned = this.cleanItem(object);
-    if (ref !== undefined) this.seen.set(ref, cleaned);
+    if (key !== undefined) this.seen.set(key, cleaned);
     return cleaned;
   }
 
