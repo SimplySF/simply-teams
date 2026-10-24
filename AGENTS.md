@@ -24,6 +24,9 @@ Use the smallest relevant topic document rather than loading the whole directory
   simply-confluence-explorer; a message holding a secret is withheld whole, personal data becomes
   `[EMAIL-1]` placeholders that are restored when the agent writes; on by default in the MCP server,
   `--clean` in the CLI.
+- [Message context](docs/design/0006-message-context.md): `message context` searches, groups the
+  hits into threads, and reads each around its hits within a character budget, so "where was this
+  discussed?" is one call.
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command
 reference. Update command metadata first, then regenerate it as described in `CONTRIBUTING.md`.

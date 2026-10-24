@@ -229,8 +229,17 @@ export async function viewMessage(
     ref.rootId === undefined
       ? `${base}/${encode(ref.messageId)}`
       : `${base}/${encode(ref.rootId)}/replies/${encode(ref.messageId)}`;
+  if (context === 0) {
+    const raw = await graph.get<GraphChatMessage>(path, SCOPES.channelMessages);
+    return { message: normalizeMessage(raw), thread: [], warnings: [] };
+  }
+  // The thread holds the message in all but one case, so it is read first and the message taken
+  // from it; one request fewer per view, which matters when context reads many threads (0006).
+  const around = await channelContext(graph, ref, context);
+  const found = around.thread.find((message) => message.id === ref.messageId);
+  if (found !== undefined) return { message: found, ...around };
+  // A reply beyond the pages that were read: fetched on its own.
   const raw = await graph.get<GraphChatMessage>(path, SCOPES.channelMessages);
-  const around = context === 0 ? { thread: [], warnings: [] } : await channelContext(graph, ref, context);
   return { message: normalizeMessage(raw), ...around };
 }
 

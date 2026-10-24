@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { TeamsMessage, TeamsSearchHit } from '@simplysf/simply-teams-core';
+import type { ContextThread, TeamsMessage, TeamsSearchHit } from '@simplysf/simply-teams-core';
 
 /** `2026-10-21 14:03` in local time: the JSON keeps the exact ISO timestamp. */
 export function when(iso: string | undefined): string {
@@ -67,6 +67,17 @@ export function renderMessage(message: TeamsMessage, focus = false): string {
 
 export function renderTranscript(messages: readonly TeamsMessage[], focusId?: string): string {
   return messages.map((message) => renderMessage(message, message.id === focusId)).join('\n\n');
+}
+
+/** One thread from `message context`: where it is, how many messages matched, then its transcript with the hits marked. */
+export function renderThread(thread: ContextThread): string {
+  const where = thread.where ?? (thread.kind === 'chat' ? 'a chat' : 'a channel');
+  const hits = `${thread.hits} matching message${thread.hits === 1 ? '' : 's'}`;
+  const cut = thread.truncated ? ', trimmed to fit' : '';
+  const hitIds = new Set(thread.hitIds);
+  const body = thread.messages.map((message) => renderMessage(message, hitIds.has(message.id))).join('\n\n');
+  const notes = thread.warnings.map((warning) => `(${warning})`).join('\n');
+  return [`━━ ${where} · ${hits}${cut}`, body, notes, `ref: ${thread.ref}`].filter((part) => part !== '').join('\n');
 }
 
 export function renderHit(hit: TeamsSearchHit): string {

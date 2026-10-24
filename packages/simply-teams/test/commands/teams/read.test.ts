@@ -20,6 +20,7 @@ import nock from 'nock';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ChannelList from '../../../src/commands/teams/channel/list.js';
 import ChatMessages from '../../../src/commands/teams/chat/messages.js';
+import MessageContextCommand from '../../../src/commands/teams/message/context.js';
 import MessageSearch from '../../../src/commands/teams/message/search.js';
 import MessageViewCommand from '../../../src/commands/teams/message/view.js';
 
@@ -175,5 +176,61 @@ describe('--clean (design 0005)', () => {
     expect(stdout.join('')).not.toContain('jane.doe');
     expect(String(warn.mock.calls[0]?.[0])).toMatch(/1 item withheld/);
     expect((result as { cleaned?: { withheld: number } }).cleaned).toMatchObject({ withheld: 1 });
+  });
+});
+
+describe('teams message context (design 0006)', () => {
+  it('reads the matching threads, marks the hits, and says how many threads came back', async () => {
+    const root = `/v1.0/teams/${TEAM}/channels/19%3Aabc%40thread.tacv2/messages/100`;
+    const channelWhere = { channelIdentity: { teamId: TEAM, channelId: '19:abc@thread.tacv2' } };
+    nock(GRAPH)
+      .post('/v1.0/search/query')
+      .reply(200, {
+        value: [
+          {
+            hitsContainers: [
+              {
+                hits: [
+                  {
+                    hitId: '100',
+                    summary: 'the <c0>freeze</c0>',
+                    resource: {
+                      id: '100',
+                      ...channelWhere,
+                      from: { user: { displayName: 'Ada' } },
+                      webUrl: `https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/100?groupId=${TEAM}&parentMessageId=100`,
+                    },
+                  },
+                ],
+                moreResultsAvailable: false,
+              },
+            ],
+          },
+        ],
+      })
+      // The root is fetched for the message itself, then again with its replies for the thread.
+      .get(root)
+      .query(true)
+      .times(2)
+      .reply(200, { ...raw('100', '<p>release freeze starts Monday</p>'), chatId: undefined, ...channelWhere })
+      .get(`${root}/replies`)
+      .query(true)
+      .reply(200, { value: [{ ...raw('101', '<p>noted</p>'), chatId: undefined, ...channelWhere, replyToId: '100' }] })
+      .get('/v1.0/me/joinedTeams')
+      .query(true)
+      .reply(200, { value: [{ id: TEAM, displayName: 'Platform' }] })
+      .get(`/v1.0/teams/${TEAM}/channels`)
+      .query(true)
+      .reply(200, { value: [{ id: '19:abc@thread.tacv2', displayName: 'General' }] });
+
+    const result = await MessageContextCommand.run(['freeze', '--threads', '2']);
+
+    expect(result.threads).toHaveLength(1);
+    expect(result.threads[0]).toMatchObject({ kind: 'channel', where: 'Platform / General', hits: 1 });
+    const output = stdout.join('');
+    expect(output).toContain('━━ Platform / General · 1 matching message');
+    expect(output).toContain('release freeze starts Monday');
+    expect(output).toContain('◀');
+    expect(output).toContain('1 thread from 1 hits.');
   });
 });

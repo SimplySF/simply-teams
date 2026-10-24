@@ -11,8 +11,8 @@ Sign-in is seamless. It uses the account the operating system is already signed 
 its identity broker (Web Account Manager on Windows), so on an Entra ID–joined machine there is
 normally no prompt at all, and this tool stores no credentials of its own.
 
-**Status:** early and unreleased. The CLI signs in, searches messages, and reads chats, channels
-and threads; it can also post in a channel, reply in a thread, and send in a chat. The MCP server
+**Status:** early and unreleased. The CLI signs in, searches messages, reads chats, channels and
+threads, and answers "where was this discussed?" in one call (`teams message context`); it can also post in a channel, reply in a thread, and send in a chat. The MCP server
 exposes the same commands, with the writes only under `--allow-writes`. See
 [docs/design](docs/design/README.md).
 
