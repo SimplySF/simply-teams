@@ -187,13 +187,49 @@ describe('gatherMessageContext (design 0006)', () => {
     expect(result.threads[0]?.where).toBeUndefined();
   });
 
-  it('counts a hit it cannot read as a thread as skipped, so the totals add up', async () => {
+  it('counts a hit that belongs to no thread as unplaced, apart from skipped threads', async () => {
     routeSearch([hit('100', 'one', 'channel'), { hitId: 'x', summary: 'no ids', resource: { id: '123' } }]);
     routeChannelThread('100', []);
     const result = await gatherMessageContext(graph(), 'x', {}, { threads: 5, context: 0, maxChars: 24_000 });
     expect(result.searched).toBe(2);
     expect(result.threads).toHaveLength(1);
-    expect(result.skipped).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(result.unplaced).toBe(1);
+  });
+
+  it('keeps a thread whose root and last reply both match, dropping its middle to fit', async () => {
+    routeSearch([hit('100', 'the root', 'channel'), hit('105', 'the last reply', 'channel', '100')]);
+    routeChannelThread('100', ['101', '102', '103', '104', '105']);
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 1, context: 10, maxChars: 220 });
+    const thread = result.threads[0];
+    expect(result.skipped).toBe(0);
+    expect(thread?.truncated).toBe(true);
+    const ids = thread?.messages.map((message) => message.id) ?? [];
+    expect(ids[0]).toBe('100');
+    expect(ids.at(-1)).toBe('105');
+    expect(ids.length).toBeLessThan(6);
+    expect(thread?.hits).toBe(2);
+  });
+
+  it('fails the call on throttling that outlasted the retries, rather than skipping the thread', async () => {
+    routeSearch([hit('7', 'busy', 'chat'), hit('100', 'fine', 'channel')]);
+    server.route(`${chatBase}/7`, (_req, res) => respondJson(res, 429, { error: { code: 'TooManyRequests' } }));
+    routeChannelThread('100', []);
+    await expect(gatherMessageContext(graph(), 'x', {}, { threads: 5, context: 0, maxChars: 24_000 })).rejects.toThrow(
+      /429/,
+    );
+    expect(server.requests.some((request) => request.url.includes('/messages/100'))).toBe(false);
+  });
+
+  it('counts only the hits a chat thread shows, when a later hit falls outside the window read', async () => {
+    routeSearch([hit('5', 'first', 'chat'), hit('40', 'much later', 'chat')]);
+    server.route(`${chatBase}/5`, (_req, res) => respondJson(res, 200, raw('5', 'first', { chatId: CHAT })));
+    server.route(chatBase, (_req, res) =>
+      respondJson(res, 200, { value: ['7', '6', '5', '4', '3'].map((id) => raw(id, `m ${id}`, { chatId: CHAT })) }),
+    );
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 1, context: 2, maxChars: 24_000 });
+    expect(result.threads[0]?.hits).toBe(1);
+    expect(result.threads[0]?.hitIds).toStrictEqual(['5']);
   });
 
   it('skips a thread whose message was deleted since it was indexed, rather than failing the call', async () => {
