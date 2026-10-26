@@ -18,7 +18,12 @@ import { Args } from '@oclif/core';
 import { searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
 import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderHit } from '../../../shared/message-output.js';
-import { searchFilterFlags, searchFiltersFrom } from '../../../shared/search-flags.js';
+import {
+  fallbackFlags,
+  searchFilterFlags,
+  searchFiltersFrom,
+  searchOptionsFrom,
+} from '../../../shared/search-flags.js';
 
 export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
   public static override readonly summary = 'Search the chat and channel messages you can see.';
@@ -28,8 +33,8 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
     'the flags add the documented filters. Results come in relevance order; Graph cannot sort them.\n\n' +
     'Each result is a snippet, not the whole message. Pass its ref to "teams message view" for the ' +
     'full text and, with --context, the conversation around it.\n\n' +
-    'Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Graph refuses ' +
-    'message search entirely without it, even for chats.';
+    'Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Until it is ' +
+    'granted, your recent chats are read instead and the output says so; --chats-only asks for that outright.';
 
   public static override readonly examples = [
     {
@@ -53,14 +58,22 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
   public static override readonly flags = {
     ...cleanFlag,
     ...searchFilterFlags,
+    ...fallbackFlags,
     ...limitFlag(25, 'results'),
   };
 
   public async run(): Promise<SearchResult> {
     const { flags } = this;
     const result = this.cleaned(
-      await searchMessages(this.graph(), this.args.query ?? '', searchFiltersFrom(flags), flags.limit),
+      await searchMessages(
+        this.graph(),
+        this.args.query ?? '',
+        searchFiltersFrom(flags),
+        flags.limit,
+        searchOptionsFrom(flags),
+      ),
     );
+    if (result.note !== undefined) this.logSafe(`${result.note}\n`);
     if (result.items.length === 0) this.log(`No messages match: ${result.query}`);
     else this.logSafe(result.items.map(renderHit).join('\n\n'));
     this.reportList(result.items.length, result.complete, flags.limit, 'results');

@@ -206,6 +206,39 @@ describe('cleaning (design 0005)', () => {
     expect(body.cleaned.summary).toContain('1 email address');
   });
 
+  it('reads chats instead of searching when asked, and says so (design 0007)', async () => {
+    const chatId = '19:chat@thread.v2';
+    server.route('/v1.0/me/chats', (_req, res) =>
+      respondJson(res, 200, { value: [{ id: chatId, chatType: 'oneOnOne' }] }),
+    );
+    server.route(`/v1.0/chats/${encodeURIComponent(chatId)}/messages`, (_req, res) => {
+      respondJson(res, 200, {
+        value: [
+          {
+            id: '1',
+            messageType: 'message',
+            chatId,
+            createdDateTime: '2026-10-26T14:00:00Z',
+            from: { user: { id: 'u', displayName: 'Ada' } },
+            body: { contentType: 'html', content: '<p>the deploy is done</p>' },
+          },
+        ],
+      });
+    });
+
+    const result = await invokeTool(spec('teams_message_search'), context(), {
+      query: 'deploy',
+      chatsOnly: true,
+      chats: 2,
+    });
+    const body = payload(result) as { scope: string; note: string; items: Array<{ summary: string }> };
+
+    expect(body.scope).toBe('chats');
+    expect(body.note).toContain('Only chats were searched');
+    expect(body.items[0]?.summary).toBe('the **deploy** is done');
+    expect(server.requests.some((request) => request.url.includes('/search/query'))).toBe(false);
+  });
+
   it("passes the sign-in status through, since it is about this session rather than anyone's message", async () => {
     server.route('/v1.0/me', (_req, res) => {
       respondJson(res, 200, { id: 'u1', displayName: 'Ada', userPrincipalName: 'ada@contoso.com' });

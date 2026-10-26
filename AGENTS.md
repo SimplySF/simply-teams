@@ -27,6 +27,9 @@ Use the smallest relevant topic document rather than loading the whole directory
 - [Message context](docs/design/0006-message-context.md): `message context` searches, groups the
   hits into threads, and reads each around its hits within a character budget, so "where was this
   discussed?" is one call.
+- [Search before admin consent](docs/design/0007-search-before-admin-consent.md): when Graph
+  refuses search for want of `ChannelMessage.Read.All`, the user's recent chats are read on the
+  client instead (`Chat.Read` only), the result says so in `note`, and `--chats-only` asks for it.
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command
 reference. Update command metadata first, then regenerate it as described in `CONTRIBUTING.md`.

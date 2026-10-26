@@ -127,17 +127,33 @@ describe('teams message search', () => {
     expect(result.items).toMatchObject([{ ref: `${CHAT}/7`, summary: '**freeze**' }]);
   });
 
-  it("passes Graph's missing-consent refusal through as an auth failure", async () => {
+  it('reads recent chats instead when Graph refuses the search for want of consent, and says so (design 0007)', async () => {
     nock(GRAPH)
       .post('/v1.0/search/query')
       .reply(403, {
         error: { code: 'Forbidden', message: 'Access to ChatMessage in Graph API requires ChannelMessage.Read.All' },
-      });
+      })
+      .get('/v1.0/me/chats')
+      .query(true)
+      .reply(200, { value: [{ id: CHAT, chatType: 'oneOnOne' }] })
+      .get(`/v1.0/chats/${encodeURIComponent(CHAT)}/messages`)
+      .query(true)
+      .reply(200, { value: [raw('2', '<p>the deploy is done</p>'), raw('1', '<p>unrelated</p>')] });
 
+    const result = await MessageSearch.run(['deploy']);
+
+    expect(result.scope).toBe('chats');
+    expect(result.items.map((hit) => hit.id)).toStrictEqual(['2']);
+    expect(result.items[0]?.summary).toBe('the **deploy** is done');
+    expect(stdout.join('')).toContain('Channels were not searched: ChannelMessage.Read.All is not granted');
+  });
+
+  it('passes any other search failure through unchanged', async () => {
+    nock(GRAPH)
+      .post('/v1.0/search/query')
+      .reply(403, { error: { code: 'Forbidden', message: 'blocked by policy' } });
     const error = await MessageSearch.run(['x']).catch((caught: unknown) => caught);
-
     expect((error as { oclif?: { exit?: number } }).oclif?.exit).toBe(3);
-    expect((error as Error).message).toMatch(/ChannelMessage\.Read\.All/);
   });
 });
 

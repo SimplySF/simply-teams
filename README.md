@@ -12,7 +12,8 @@ its identity broker (Web Account Manager on Windows), so on an Entra ID–joined
 normally no prompt at all, and this tool stores no credentials of its own.
 
 **Status:** early and unreleased. The CLI signs in, searches messages, reads chats, channels and
-threads, and answers "where was this discussed?" in one call (`teams message context`); it can also post in a channel, reply in a thread, and send in a chat. The MCP server
+threads, and answers "where was this discussed?" in one call (`teams message context`). Before an
+administrator has consented to channel reads, search reads your recent chats instead and says so; it can also post in a channel, reply in a thread, and send in a chat. The MCP server
 exposes the same commands, with the writes only under `--allow-writes`. See
 [docs/design](docs/design/README.md).
 

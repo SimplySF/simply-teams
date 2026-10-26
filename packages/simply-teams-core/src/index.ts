@@ -79,6 +79,14 @@ export { assertWritesAllowed, isReadOnly, READ_ONLY_ENV } from './write-safety.j
 export { collectSecrets, redactSecrets, sanitiseDeep, SECRET_ENV, secretValues } from './redaction.js';
 
 export {
+  DEFAULT_CHATS,
+  MAX_CHATS,
+  searchChats,
+  searchWords,
+  summarize,
+  type ChatSearchOptions,
+} from './chat-search.js';
+export {
   DEFAULT_CONTEXT,
   DEFAULT_MAX_CHARS,
   DEFAULT_THREADS,
@@ -155,6 +163,7 @@ export {
   type WriteInput,
   type MessageListOptions,
   type MessageView,
+  type SearchOptions,
   type SearchResult,
   type TeamsChannel,
   type TeamsTeam,
