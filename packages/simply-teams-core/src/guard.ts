@@ -143,7 +143,15 @@ const LABEL: Readonly<Record<string, string>> = {
 };
 
 /** A placeholder this guard writes: `[EMAIL-1]`. */
-const PLACEHOLDER_TOKEN = /\[[A-Z_]+-\d+\]/g;
+const PLACEHOLDER_TOKEN = /\[([A-Z_]+)-\d+\]/g;
+
+/**
+ * The kinds of personal data a write may put back. An address or a number is how an agent answers
+ * or mentions someone it was shown. A card number, an SSN or an IBAN never needs restoring for
+ * that, and restoring one would let an agent carry it from the chat it was seen in to people who
+ * never saw it, so those placeholders reach Teams as written (design 0005).
+ */
+const RESTORABLE = new Set(['EMAIL', 'PHONE']);
 
 /** The kinds of secret in a text, in the order found. The values are never returned. */
 export function secretsIn(text: string): string[] {
@@ -187,9 +195,30 @@ export class TeamsGuard {
     return out;
   }
 
-  /** Puts real values back for this guard's placeholders. One it never issued is left as written. */
+  /**
+   * Puts real values back for this guard's email and phone placeholders. Any other kind, and one it
+   * never issued, is left as written.
+   */
   public restore(text: string): string {
-    return text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => this.originals.get(placeholder) ?? placeholder);
+    return text.replaceAll(PLACEHOLDER_TOKEN, (placeholder: string, label: string) =>
+      RESTORABLE.has(label) ? (this.originals.get(placeholder) ?? placeholder) : placeholder,
+    );
+  }
+
+  /**
+   * The reverse of {@link restore}, for text that may quote a restored value back: an error whose
+   * message names the request path. Every value this guard has replaced goes back to its
+   * placeholder, written plainly or URL-encoded, wherever it stands. The detectors cannot be relied
+   * on here, since `/users/ada%40contoso.com` is not shaped like an address.
+   */
+  public rehide(text: string): string {
+    let out = text;
+    // Longest first, so a value that contains another is replaced whole.
+    const pairs = [...this.originals.entries()].sort(([, a], [, b]) => b.length - a.length);
+    for (const [placeholder, value] of pairs) {
+      for (const form of new Set([value, encodeURIComponent(value)])) out = out.replaceAll(form, placeholder);
+    }
+    return out;
   }
 
   private placeholderFor(type: string, value: string): string {

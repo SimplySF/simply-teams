@@ -29,8 +29,9 @@ result before it is returned:
 - **personal data** (email addresses, phone numbers, US social security numbers, card numbers,
   IBANs) is replaced with placeholders, `[EMAIL-1]`, `[PHONE-1]`, that stay the same for the life
   of the server;
-- every string in a **write tool's input** is restored first, so a reply that says "thanks
-  `[EMAIL-1]`" reaches Teams with the real address, and the dry run the agent sees is cleaned again.
+- every string in a **write tool's input** has its email and phone placeholders restored first, so a
+  reply that says "thanks `[EMAIL-1]`" reaches Teams with the real address, and the dry run the agent
+  sees is cleaned again. Card, SSN and IBAN placeholders are never restored.
 
 Cleaning is on by default in the MCP server and off by default in the CLI, where a person reading
 their own Teams at a terminal sees the real text; `--clean` turns it on for a command whose output
@@ -81,7 +82,17 @@ a URL), US SSNs, card numbers by prefix and checksum, IBANs by checksum, US-shap
 
 The guard's map (value to placeholder, and back) lives in memory for the server's lifetime and is
 never returned, logged or written. `restoreInput` rewrites every string in a tool's input before the
-tool runs; a placeholder the guard never issued is left as typed. The CLI's `--clean` uses a fresh
+tool runs; a placeholder the guard never issued is left as typed.
+
+Only `[EMAIL-n]` and `[PHONE-n]` are restored. Those are how an agent answers or mentions someone it
+was shown. A card number, SSN or IBAN is never needed for that, and restoring one would let an agent
+carry it from the chat where it was seen to people who never saw it, so `[CARD-n]`, `[SSN-n]` and
+`[IBAN-n]` reach Teams as written.
+
+An error can quote what was sent, and a restored address in a request path is URL-encoded
+(`/users/ada%40contoso.com`), which no detector matches. So before an error is cleaned,
+`rehideDeep` puts every value the guard has replaced back behind its placeholder, in plain and
+encoded form, wherever it appears. The CLI's `--clean` uses a fresh
 guard per command, so its placeholders cannot be restored; it is for output that is leaving.
 
 ### The secret's own value
