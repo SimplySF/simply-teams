@@ -26,9 +26,15 @@ export interface SearchOptions {
   readonly chatsOnly?: boolean;
   /** How many recent chats a chat scan reads; {@link DEFAULT_CHATS} when omitted. */
   readonly chats?: number;
+  /** The most hits one chat may contribute to a scan; unbounded when omitted. */
+  readonly hitsPerChat?: number;
 }
 
-/** Graph refusing search for want of the admin-only scope: the one failure a chat scan answers. */
+/**
+ * Graph refusing search for want of the admin-only scope: the one failure a chat scan answers.
+ * Graph names the scope in the body (seen live, 2026-10-22: "Access to ChatMessage in Graph API
+ * requires the following permissions: Chat.Read or Chat.ReadWrite, ChannelMessage.Read.All").
+ */
 function refusedForChannelScope(error: unknown): boolean {
   return error instanceof AuthError && error.status === 403 && error.message.includes('ChannelMessage.Read.All');
 }
@@ -47,15 +53,15 @@ export async function searchMessages(
   limit: number,
   options: SearchOptions = {},
 ): Promise<SearchResult> {
-  const chats = options.chats ?? DEFAULT_CHATS;
-  if (options.chatsOnly === true) return searchChats(graph, text, filters, { chats, limit, reason: 'asked' });
+  const scan = { chats: options.chats ?? DEFAULT_CHATS, limit, hitsPerChat: options.hitsPerChat };
+  if (options.chatsOnly === true) return searchChats(graph, text, filters, { ...scan, reason: 'asked' });
   if ((await graph.consented(SCOPES.search)) === false) {
-    return searchChats(graph, text, filters, { chats, limit, reason: 'consent' });
+    return searchChats(graph, text, filters, { ...scan, reason: 'consent' });
   }
   try {
     return await searchGraph(graph, text, filters, limit);
   } catch (error) {
     if (!refusedForChannelScope(error)) throw error;
-    return searchChats(graph, text, filters, { chats, limit, reason: 'consent' });
+    return searchChats(graph, text, filters, { ...scan, reason: 'consent' });
   }
 }

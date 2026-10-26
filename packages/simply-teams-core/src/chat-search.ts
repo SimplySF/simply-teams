@@ -35,6 +35,13 @@ export interface ChatSearchOptions {
   readonly limit: number;
   /** Why channels were not searched; shapes the note. */
   readonly reason: 'consent' | 'asked';
+  /** The most hits one chat may contribute, so one busy chat cannot crowd out the others (0006 asks for this). */
+  readonly hitsPerChat?: number;
+}
+
+/** Graph's `sent>=` and `sent<=` are whole UTC days; the scan keeps the same meaning. */
+function startOfDay(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 export const DEFAULT_CHATS = 20;
@@ -71,19 +78,23 @@ function escapeRegExp(text: string): string {
 /** A window of the text around its first match, with every match in bold, as Graph's summaries are. */
 export function summarize(text: string, words: readonly string[]): string {
   const flat = text.replaceAll(/\s+/g, ' ').trim();
-  const lower = flat.toLowerCase();
-  const first =
-    words
-      .map((word) => lower.indexOf(word))
-      .filter((index) => index >= 0)
-      .sort((a, b) => a - b)[0] ?? 0;
-  const start = Math.max(0, first - Math.floor(SUMMARY_WINDOW / 3));
-  const end = Math.min(flat.length, start + SUMMARY_WINDOW);
+  if (words.length === 0) return flat.length > SUMMARY_WINDOW ? `${flat.slice(0, SUMMARY_WINDOW)}…` : flat;
+  // Longest word first, so "foobar" is one match rather than "foo" inside it; matched on the text
+  // itself, case-insensitively, so offsets are never taken from a lower-cased copy of a different length.
+  const pattern = new RegExp(
+    [...words]
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRegExp)
+      .join('|'),
+    'gi',
+  );
+  const first = flat.search(pattern);
+  const start = Math.max(0, (first === -1 ? 0 : first) - Math.floor(SUMMARY_WINDOW / 3));
+  let end = Math.min(flat.length, start + SUMMARY_WINDOW);
+  // Not mid-word: a match cut in half would be half bolded.
+  while (end < flat.length && flat[end] !== ' ') end += 1;
   let window = flat.slice(start, end);
-  if (words.length > 0) {
-    const pattern = new RegExp(words.map(escapeRegExp).join('|'), 'gi');
-    window = window.replaceAll(pattern, (match) => `**${match}**`);
-  }
+  window = window.replaceAll(pattern, (match) => `**${match}**`);
   return `${start > 0 ? '…' : ''}${window}${end < flat.length ? '…' : ''}`;
 }
 
@@ -119,7 +130,7 @@ function matches(
   if (
     filters.until !== undefined &&
     message.createdAt !== undefined &&
-    Date.parse(message.createdAt) >= filters.until.getTime() + DAY_MS
+    Date.parse(message.createdAt) >= startOfDay(filters.until) + DAY_MS
   ) {
     return false;
   }
@@ -142,12 +153,18 @@ function hitFrom(message: TeamsMessage, words: readonly string[]): TeamsSearchHi
   };
 }
 
-function note(options: ChatSearchOptions, droppedKql: boolean, unreadable: number): string {
+function note(
+  options: ChatSearchOptions,
+  read: { count: number; all: boolean },
+  droppedKql: boolean,
+  unreadable: number,
+): string {
   const why =
     options.reason === 'consent'
       ? 'Channels were not searched: ChannelMessage.Read.All is not granted to this app.'
       : 'Only chats were searched, as asked.';
-  const parts = [`The ${options.chats} most recent chats were read instead, up to ${PER_CHAT} messages each`];
+  const which = read.all ? `All ${read.count} of your chats` : `The ${read.count} most recent chats`;
+  const parts = [`${which} were read instead, up to ${PER_CHAT} messages each`];
   if (unreadable > 0) parts.push(`${unreadable} of them could not be read`);
   if (droppedKql) parts.push('KQL operators in the query were ignored');
   return `${why} ${parts.join('; ')}.`;
@@ -188,7 +205,10 @@ export async function searchChats(
   for (const chat of chats.items) {
     let messages;
     try {
-      messages = await listChatMessages(graph, chat.id, { since: filters.since, limit: PER_CHAT });
+      messages = await listChatMessages(graph, chat.id, {
+        since: filters.since === undefined ? undefined : new Date(startOfDay(filters.since)),
+        limit: PER_CHAT,
+      });
     } catch (error) {
       // A meeting chat the user has left answers 403 (0002): skip it, like everything else does.
       if (error instanceof AuthError && error.status === 403) {
@@ -198,9 +218,9 @@ export async function searchChats(
       throw error;
     }
     pages += messages.pages;
-    for (const message of messages.items) {
-      if (matches(message, words, filters, myName)) hits.push(hitFrom(message, words));
-    }
+    // Newest first within the chat, so a per-chat cap keeps a chat's latest matches.
+    const own = [...messages.items].reverse().filter((message) => matches(message, words, filters, myName));
+    hits.push(...own.slice(0, options.hitsPerChat ?? own.length).map((message) => hitFrom(message, words)));
   }
   /* eslint-enable no-await-in-loop */
 
@@ -212,6 +232,6 @@ export async function searchChats(
     pages,
     complete: hits.length <= options.limit,
     scope: 'chats',
-    note: note(options, droppedKql, unreadable),
+    note: note(options, { count: chats.items.length, all: chats.complete }, droppedKql, unreadable),
   };
 }

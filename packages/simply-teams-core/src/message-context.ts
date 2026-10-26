@@ -260,7 +260,8 @@ export async function gatherMessageContext(
     text,
     filters,
     Math.min(MAX_HITS, options.threads * HITS_PER_THREAD),
-    options.search,
+    // Under the chat fallback, cap each chat's hits so one busy chat cannot crowd the others out.
+    { ...options.search, hitsPerChat: HITS_PER_THREAD },
   );
   const { groups, unreadable } = groupHits(search.items);
   const namer = new Namer(graph);

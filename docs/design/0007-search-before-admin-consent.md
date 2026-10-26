@@ -42,7 +42,7 @@ search the moment consent lands, with no change to how the tool is called.
 | `--since` and the rest | as search    | `since` bounds each chat read; the other filters apply to each message |
 
 - Chats are read most recently active first (`chat list`'s order), one at a time, up to 200
-  messages each (one page bound, `since` permitting). Reading stops early in a chat once it is
+  messages each (four pages, `since` permitting). Reading stops early in a chat once it is
   older than `since`.
 - **Matching** is on words, not KQL: every word of the query must appear in the message's text or
   subject, case-insensitively. A KQL term in the query (`from:x`, `sent>=…`, `AND`) is dropped
@@ -53,9 +53,9 @@ search the moment consent lands, with no change to how the tool is called.
 - **Hits** have 0002's search-hit shape, so `message view`, `message context` and the renderers
   take them unchanged. The `summary` is a window of the message around its first match, with the
   matched words in `**bold**` as Graph's summaries are. Hits come newest first, since there is no
-  relevance to rank by, and `complete` is false when a bound was hit: more chats than were read,
-  a chat longer than one page, or more hits than `limit`. Chats that could not be read are counted in
-  the note.
+  relevance to rank by. `complete` answers one question, whether `limit` cut the hits; the chat
+  bound, how many chats were actually read, and any that could not be read are stated in the note.
+  `message context` caps each chat's hits so one busy chat cannot crowd out the others.
 - `message context` reads the hit threads as 0006 describes; chat hits need only `Chat.Read`.
 
 ### What the caller is told

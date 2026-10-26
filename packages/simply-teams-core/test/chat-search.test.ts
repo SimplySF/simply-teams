@@ -148,6 +148,10 @@ describe('searchChats (design 0007)', () => {
     const sameDay = await searchChats(client, 'deploy', { until: new Date('2026-10-26T00:00:00Z') }, SCAN);
     expect(sameDay.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3']);
 
+    // `since` is a whole day too: an afternoon instant still includes that morning.
+    const sinceToday = await searchChats(client, 'deploy', { since: new Date('2026-10-26T14:30:00Z') }, SCAN);
+    expect(sinceToday.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3']);
+
     const mentions = await searchChats(client, 'deploy from:bo', { mentionsMe: true }, SCAN);
     expect(mentions.items.map((hit) => hit.id)).toStrictEqual(['5']);
     expect(mentions.note).toContain('KQL operators in the query were ignored');
@@ -161,6 +165,16 @@ describe('searchChats (design 0007)', () => {
     const whole = await searchChats(graph(), 'x', {}, { chats: 1, limit: 5, reason: 'asked' });
     expect(whole.complete).toBe(true);
     expect(whole.note).toContain('The 1 most recent chats');
+  });
+
+  it('caps the hits one chat may contribute when asked, so another chat still shows', async () => {
+    routeChats({
+      [CHAT_A]: [raw('5', CHAT_A, '<p>x</p>'), raw('4', CHAT_A, '<p>x</p>'), raw('3', CHAT_A, '<p>x</p>')],
+      [CHAT_B]: [raw('1', CHAT_B, '<p>x</p>')],
+    });
+    const result = await searchChats(graph(), 'x', {}, { ...SCAN, limit: 3, hitsPerChat: 2 });
+    expect(result.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '1']);
+    expect(result.note).toContain('All 2 of your chats were read');
   });
 
   it('refuses a query that is only KQL, since a scan has nothing to match', async () => {
@@ -192,6 +206,15 @@ describe('searchMessages falls back (design 0007)', () => {
     expect(requested[0]).toMatchObject({ scopes: ['Chat.Read', 'ChannelMessage.Read.All'], silentOnly: true });
   });
 
+  it('reports a sign-in problem as itself, not as a missing consent', async () => {
+    const broken: TokenProvider = {
+      getToken: () => Promise.reject(new AuthError('Sign-in needs you to confirm it once', 401)),
+    };
+    const client = new GraphClient(config, broken, { baseUrl: `${server.baseUrl}/v1.0`, maxAttempts: 1 });
+    await expect(searchMessages(client, 'deploy', {}, 25)).rejects.toThrow(/confirm it once/);
+    expect(server.requests).toHaveLength(0);
+  });
+
   it('searches Graph when the token holds the scopes', async () => {
     server.route('/v1.0/search/query', (_req, res) =>
       respondJson(res, 200, { value: [{ hitsContainers: [{ hits: [], moreResultsAvailable: false }] }] }),
@@ -217,7 +240,7 @@ describe('searchMessages falls back (design 0007)', () => {
     routeChats({ [CHAT_A]: [raw('1', CHAT_A, '<p>deploy</p>')] });
     const result = await searchMessages(graph(), 'deploy', {}, 25, { chatsOnly: true, chats: 3 });
     expect(result.scope).toBe('chats');
-    expect(result.note).toContain('The 3 most recent chats');
+    expect(result.note).toContain('All 1 of your chats were read');
     expect(server.requests.some((request) => request.url.includes('/search/query'))).toBe(false);
   });
 });

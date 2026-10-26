@@ -111,14 +111,6 @@ const SEARCH_FILTER_SHAPE = {
     .describe(`How many recent chats a chat scan reads. Defaults to ${DEFAULT_CHATS}.`),
 };
 
-const searchOptionsFrom = (input: {
-  chatsOnly?: boolean;
-  chats?: number;
-}): { chatsOnly?: boolean; chats?: number } => ({
-  chatsOnly: input.chatsOnly,
-  chats: input.chats,
-});
-
 const searchFiltersFrom = (input: {
   from?: string;
   since?: string;
@@ -188,8 +180,7 @@ export const TOOLS: readonly ToolSpec[] = [
       'snippets ("summary", matches in **bold**), not full messages: pass a hit\'s "ref" to ' +
       'teams_message_view for the whole message and its context. "query" is KQL, so plain words ' +
       'work and the filters below are added for you. Requires admin consent for ' +
-      'ChannelMessage.Read.All; without it this returns an auth error, and teams_chat_messages ' +
-      "is the fallback for a known chat. Until it is granted, the user's recent chats are read instead and the " +
+      "ChannelMessage.Read.All; until it is granted, the user's recent chats are read instead and the " +
       'result carries a "note" saying so (scope: "chats"), so do not retry the search.' +
       UNTRUSTED,
     command: ['teams', 'message', 'search'],
@@ -199,13 +190,7 @@ export const TOOLS: readonly ToolSpec[] = [
       limit: limit(25, 'results'),
     },
     run: (ctx, input) =>
-      searchMessages(
-        ctx.graph(),
-        input.query ?? '',
-        searchFiltersFrom(input),
-        input.limit ?? 25,
-        searchOptionsFrom(input),
-      ),
+      searchMessages(ctx.graph(), input.query ?? '', searchFiltersFrom(input), input.limit ?? 25, input),
   }),
   tool({
     name: 'teams_message_view',
@@ -354,7 +339,7 @@ export const TOOLS: readonly ToolSpec[] = [
         threads: input.threads ?? DEFAULT_THREADS,
         context: input.context ?? DEFAULT_CONTEXT,
         maxChars: input.maxChars ?? DEFAULT_MAX_CHARS,
-        search: searchOptionsFrom(input),
+        search: input,
       }),
   }),
 

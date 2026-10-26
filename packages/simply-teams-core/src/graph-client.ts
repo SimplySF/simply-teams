@@ -17,7 +17,7 @@
 import type { TeamsConfig } from './config.js';
 import { AuthError } from './errors.js';
 import { HttpTransport, type QueryValue } from './http.js';
-import { missingScopes, type TokenProvider } from './token.js';
+import { BASE_SCOPES, missingScopes, type TokenProvider } from './token.js';
 
 /** Everything a caller needs after following pages: the items plus why paging stopped. */
 export interface ListResult<T = unknown> {
@@ -102,8 +102,11 @@ export class GraphClient {
     try {
       ({ scopes: granted } = await this.tokens.getToken({ scopes, silentOnly: true }));
     } catch (error) {
-      if (error instanceof AuthError) return false;
-      throw error;
+      if (!(error instanceof AuthError)) throw error;
+      // The broker says nothing about why. A token for the base scope tells them apart: if that
+      // cannot be had either, the sign-in itself is the problem, and that is what is reported.
+      await this.tokens.getToken({ scopes: BASE_SCOPES, silentOnly: true });
+      return false;
     }
     if (granted.length === 0) return undefined;
     return missingScopes(granted, scopes).length === 0;
