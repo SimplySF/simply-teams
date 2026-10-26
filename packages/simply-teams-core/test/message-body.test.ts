@@ -49,6 +49,15 @@ describe('message bodies', () => {
     ]);
   });
 
+  it('numbers mentions after any the HTML already carries, so no two share an id', () => {
+    const body = buildMessageBody({ html: '<p><at id="0">Cy</at> and <at id=\'2\'>Di</at></p>' }, [
+      { id: 'u1', name: 'Ada' },
+    ]);
+    expect(body.body.content).toBe('<at id="3">Ada</at> <p><at id="0">Cy</at> and <at id=\'2\'>Di</at></p>');
+    expect(body.mentions?.map((mention) => mention.id)).toStrictEqual([3]);
+    expect(buildMessageBody({ text: 'x <at id="5">' }, [{ id: 'u1', name: 'Ada' }]).mentions?.[0]?.id).toBe(0);
+  });
+
   it('refuses an empty message, and one given as both text and HTML', () => {
     expect(() => buildMessageBody({ text: '   ' })).toThrow(ConfigError);
     expect(() => buildMessageBody({ text: 'a', html: '<p>a</p>' })).toThrow(/not both/);

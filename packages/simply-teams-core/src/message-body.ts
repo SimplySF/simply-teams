@@ -70,6 +70,15 @@ export function validateMessageInput(input: MessageInput): boolean {
   return hasText;
 }
 
+/** One past the highest `<at id>` already in the HTML, or 0 when it has none. */
+function nextMentionId(html: string): number {
+  let next = 0;
+  for (const match of html.matchAll(/<at\b[^>]*\bid\s*=\s*["']?(\d+)/gi)) {
+    next = Math.max(next, Number(match[1]) + 1);
+  }
+  return next;
+}
+
 /**
  * Builds a message body. Plain text is escaped, so `<b>` in it is shown rather than obeyed; HTML
  * is sent as given, for callers that want formatting. Mentions are placed at the start, each as
@@ -79,14 +88,16 @@ export function validateMessageInput(input: MessageInput): boolean {
 export function buildMessageBody(input: MessageInput, mentions: readonly MentionTarget[] = []): MessageBody {
   const hasText = validateMessageInput(input);
   const content = hasText ? textToHtml(input.text ?? '') : (input.html ?? '');
-  const tags = mentions.map((person, index) => `<at id="${index}">${escapeHtml(person.name)}</at>`);
+  // HTML may carry its own mentions; ours are numbered after them, so no two share an id.
+  const first = nextMentionId(hasText ? '' : content);
+  const tags = mentions.map((person, index) => `<at id="${first + index}">${escapeHtml(person.name)}</at>`);
   return {
     body: { contentType: 'html', content: tags.length === 0 ? content : `${tags.join(' ')} ${content}` },
     ...(mentions.length === 0
       ? {}
       : {
           mentions: mentions.map((person, index) => ({
-            id: index,
+            id: first + index,
             mentionText: person.name,
             mentioned: { user: { id: person.id, displayName: person.name, userIdentityType: 'aadUser' as const } },
           })),

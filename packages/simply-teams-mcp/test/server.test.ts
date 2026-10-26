@@ -153,6 +153,28 @@ describe('cleaning (design 0005)', () => {
     expect(payload(result)).toMatchObject({ code: 'config', message: expect.stringContaining('[EMAIL-1]') });
   });
 
+  it('hides a restored address that an error quotes in its request path, encoded or not', async () => {
+    const ctx = context();
+    server.route(path, (_req, res) => {
+      respondJson(res, 200, { value: [raw('1', '<p>from jane.doe@example.com</p>')] });
+    });
+    await invokeTool(spec('teams_chat_messages'), ctx, { chat });
+    server.route('/v1.0/users/jane.doe%40example.com', (_req, res) => {
+      respondJson(res, 403, {
+        error: {
+          code: 'Authorization_RequestDenied',
+          message: 'Insufficient privileges for /users/jane.doe@example.com',
+        },
+      });
+    });
+
+    const result = await invokeTool(spec('teams_chat_send'), ctx, { chat, text: 'hi', mentions: ['[EMAIL-1]'] });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('jane.doe');
+    expect(JSON.stringify(result)).toContain('/users/[EMAIL-1]');
+  });
+
   it("passes the sign-in status through, since it is about this session rather than anyone's message", async () => {
     server.route('/v1.0/me', (_req, res) => {
       respondJson(res, 200, { id: 'u1', displayName: 'Ada', userPrincipalName: 'ada@contoso.com' });

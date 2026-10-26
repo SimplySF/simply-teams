@@ -21,15 +21,16 @@ import type { CallToolResult, ToolAnnotations } from '@modelcontextprotocol/sdk/
 import {
   assertWritesAllowed,
   AuthError,
+  cleanResult,
   CliError,
   ConfigError,
   HttpError,
   redactSecrets,
+  rehideDeep,
+  restoreInput,
   sanitiseDeep,
   secretValues,
   stripControl,
-  cleanResult,
-  restoreInput,
 } from '@simplysf/simply-teams-core';
 import { createContext, type ServerOptions, type ToolContext } from './context.js';
 import { TOOLS, type ToolKind, type ToolSpec } from './tools.js';
@@ -157,9 +158,11 @@ export async function invokeTool(
     return { content: [{ type: 'text', text: JSON.stringify(cleaned) }] };
   } catch (error) {
     const mapped = mapError(error, context);
-    // A failure can quote what was sent: a restored address in a path, a body Graph echoed back.
-    // It is cleaned like a result, so nothing the guard hid comes back through an error.
-    return errorResult(context.guard === undefined ? mapped : cleanResult(context.guard, mapped).value);
+    // A failure can quote what was sent: a restored address in a path, URL-encoded, or a body Graph
+    // echoed back. Every value the guard restored goes back behind its placeholder first, since the
+    // detectors do not match an encoded address, then the error is cleaned like a result.
+    const { guard } = context;
+    return errorResult(guard === undefined ? mapped : cleanResult(guard, rehideDeep(guard, mapped)).value);
   }
 }
 

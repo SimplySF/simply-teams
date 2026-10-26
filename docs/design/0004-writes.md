@@ -103,6 +103,11 @@ Graph did not act:
 | connection dropped | no                                                                   | the same                                                   |
 | timeout            | no                                                                   | the same                                                   |
 
+This errs towards a false alarm. In a long-running MCP server, a pooled connection that went stale
+while idle fails with `ECONNRESET` or `UND_ERR_SOCKET` before Graph receives anything, and the post
+still reports "may have been posted". The transport cannot tell that from a connection dropped after
+the request landed, so both are treated as possibly sent; the cost is a check that finds nothing.
+
 Reads, including search's read-only POST, keep 0001's policy. The MCP instructions tell the agent
 that "may have been posted" means check, not retry. This is simply-atlassian's 0017 rule, ported.
 
