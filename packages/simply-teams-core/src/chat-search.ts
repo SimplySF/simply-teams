@@ -46,8 +46,11 @@ function startOfDay(date: Date): number {
 
 export const DEFAULT_CHATS = 20;
 export const MAX_CHATS = 100;
-/** One page of a chat, the most Graph returns per request times the pages one chat is worth here. */
-const PER_CHAT = 200;
+/**
+ * How far back one chat is read: two pages of Graph's 50. At the default of 20 chats that is about
+ * 40 requests; the scan also stops early once no older chat could hold a newer hit (design 0007).
+ */
+const PER_CHAT = 100;
 /** How much of a message is shown around its first match. */
 const SUMMARY_WINDOW = 160;
 
@@ -120,7 +123,7 @@ function matches(
   message: TeamsMessage,
   words: readonly string[],
   filters: SearchFilters,
-  myName: string | undefined,
+  myId: string | undefined,
 ): boolean {
   if (message.kind === 'event' || message.deleted) return false;
   const haystack = `${message.subject ?? ''}\n${message.text}`.toLowerCase();
@@ -134,8 +137,10 @@ function matches(
   ) {
     return false;
   }
+  // By ID, from the message's mentions[]: the text cannot be trusted, since Teams splits a mention
+  // into one tag per name part ("@Joe @AbiJaoudi") and people shorten it ("@Joe").
   if (filters.mentionsMe === true) {
-    if (myName === undefined || !haystack.includes(`@${myName.toLowerCase()}`)) return false;
+    if (myId === undefined || !(message.mentionedUserIds ?? []).includes(myId)) return false;
   }
   return true;
 }
@@ -155,7 +160,7 @@ function hitFrom(message: TeamsMessage, words: readonly string[]): TeamsSearchHi
 
 function note(
   options: ChatSearchOptions,
-  read: { count: number; all: boolean },
+  read: { count: number; all: boolean; stoppedEarly: boolean },
   droppedKql: boolean,
   unreadable: number,
 ): string {
@@ -165,9 +170,22 @@ function note(
       : 'Only chats were searched, as asked.';
   const which = read.all ? `All ${read.count} of your chats` : `The ${read.count} most recent chats`;
   const parts = [`${which} were read instead, up to ${PER_CHAT} messages each`];
+  if (read.stoppedEarly) parts.push('older chats were not read, since none could hold a newer match');
   if (unreadable > 0) parts.push(`${unreadable} of them could not be read`);
   if (droppedKql) parts.push('KQL operators in the query were ignored');
   return `${why} ${parts.join('; ')}.`;
+}
+
+/**
+ * Whether the hits already found are certainly the newest `limit`: there are that many, and the
+ * oldest of them is newer than this chat's last message, so nothing in this chat, or in any chat
+ * after it, could displace one. A chat with no known last message is always read.
+ */
+function holdsNewest(hits: readonly TeamsSearchHit[], limit: number, lastActive: string | undefined): boolean {
+  if (lastActive === undefined || hits.length < limit) return false;
+  const newest = hits.map((hit) => hit.createdAt ?? '').sort((a, b) => b.localeCompare(a));
+  const cutoff = newest[limit - 1] ?? '';
+  return cutoff !== '' && cutoff > lastActive;
 }
 
 /**
@@ -193,16 +211,24 @@ export async function searchChats(
   if (words.length === 0 && !filtered) {
     throw new ConfigError('A chat scan matches words, not KQL: give words to look for, or a filter flag.');
   }
-  const myName = filters.mentionsMe === true ? (await graph.me()).displayName : undefined;
+  const myId = filters.mentionsMe === true ? (await graph.me()).id : undefined;
 
   const chats = await listChats(graph, options.chats);
   const hits: TeamsSearchHit[] = [];
   let pages = chats.pages;
   let unreadable = 0;
+  let read = 0;
+  let stoppedEarly = false;
 
   /* One chat at a time: fanning out would trip Graph's per-app throttling. */
   /* eslint-disable no-await-in-loop */
   for (const chat of chats.items) {
+    if (holdsNewest(hits, options.limit, chat.lastMessage?.at)) {
+      // Chats come most recently active first, so every chat from here on is older still.
+      stoppedEarly = true;
+      break;
+    }
+    read += 1;
     let messages;
     try {
       messages = await listChatMessages(graph, chat.id, {
@@ -219,7 +245,7 @@ export async function searchChats(
     }
     pages += messages.pages;
     // Newest first within the chat, so a per-chat cap keeps a chat's latest matches.
-    const own = [...messages.items].reverse().filter((message) => matches(message, words, filters, myName));
+    const own = [...messages.items].reverse().filter((message) => matches(message, words, filters, myId));
     hits.push(...own.slice(0, options.hitsPerChat ?? own.length).map((message) => hitFrom(message, words)));
   }
   /* eslint-enable no-await-in-loop */
@@ -232,6 +258,6 @@ export async function searchChats(
     pages,
     complete: hits.length <= options.limit,
     scope: 'chats',
-    note: note(options, { count: chats.items.length, all: chats.complete }, droppedKql, unreadable),
+    note: note(options, { count: read, all: chats.complete && !stoppedEarly, stoppedEarly }, droppedKql, unreadable),
   };
 }

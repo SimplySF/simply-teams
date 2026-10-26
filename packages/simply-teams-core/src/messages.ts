@@ -44,6 +44,8 @@ export interface GraphChatMessage {
     readonly name?: string | null;
   }>;
   readonly eventDetail?: { readonly '@odata.type'?: string } | null;
+  /** Who the message @mentions. Teams often splits one person into an entry per name part. */
+  readonly mentions?: ReadonlyArray<{ readonly mentioned?: { readonly user?: GraphIdentity | null } | null }> | null;
   readonly webUrl?: string | null;
 }
 
@@ -107,6 +109,8 @@ export interface TeamsMessage {
   /** Written by someone in the conversation: untrusted, and already stripped of control characters. */
   readonly text: string;
   readonly attachments: ReadonlyArray<{ readonly name?: string; readonly kind: AttachmentKind; readonly url?: string }>;
+  /** The user IDs the message @mentions, once each; absent when it mentions no one. */
+  readonly mentionedUserIds?: readonly string[];
   readonly webUrl?: string;
 }
 
@@ -215,8 +219,19 @@ export function normalizeMessage(raw: GraphChatMessage): TeamsMessage {
     subject: present(raw.subject) === undefined ? undefined : stripControl(raw.subject ?? ''),
     text,
     attachments: attachments.map(({ name, kind, url }) => ({ name, kind, url })),
+    ...mentionedIds(raw),
     webUrl: present(raw.webUrl),
   };
+}
+
+/** The distinct user IDs in `mentions[]`, as an optional field so a message with none keeps its shape. */
+function mentionedIds(raw: GraphChatMessage): { mentionedUserIds?: string[] } {
+  const ids = new Set<string>();
+  for (const mention of raw.mentions ?? []) {
+    const id = present(mention.mentioned?.user?.id);
+    if (id !== undefined) ids.add(id);
+  }
+  return ids.size === 0 ? {} : { mentionedUserIds: [...ids] };
 }
 
 /** Renders Graph's search summary: `<c0>` marks a match and `<ddd/>` an elision. */

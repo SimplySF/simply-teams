@@ -127,15 +127,34 @@ describe('searchChats (design 0007)', () => {
   it('applies the sender, until and mentions-me filters, and says when KQL was dropped', async () => {
     routeChats({
       [CHAT_A]: [
-        raw('5', CHAT_A, '<p>@Joe AbiJaoudi deploy please</p>', 'Bo', '2026-10-26T15:00:00Z'),
+        // Teams' own markup: one <at> per name part, both pointing at the same user.
+        {
+          ...raw(
+            '5',
+            CHAT_A,
+            '<p><at id="0">Joe</at> <at id="1">AbiJaoudi</at> deploy please</p>',
+            'Bo',
+            '2026-10-26T15:00:00Z',
+          ),
+          mentions: [
+            { id: 0, mentionText: 'Joe', mentioned: { user: { id: 'me', displayName: 'Joe AbiJaoudi' } } },
+            { id: 1, mentionText: 'AbiJaoudi', mentioned: { user: { id: 'me', displayName: 'Joe AbiJaoudi' } } },
+          ],
+        },
         raw('4', CHAT_A, '<p>deploy done</p>', 'Ada Lovelace', '2026-10-26T14:00:00Z'),
         raw('3', CHAT_A, '<p>deploy soon</p>', 'Bo', '2026-10-26T13:00:00Z'),
+        // A mention shortened to a first name, and text that merely looks like a mention.
+        {
+          ...raw('2', CHAT_A, '<p><at id="0">Joe</at> deploy?</p>', 'Bo', '2026-10-26T12:00:00Z'),
+          mentions: [{ id: 0, mentionText: 'Joe', mentioned: { user: { id: 'me', displayName: 'Joe AbiJaoudi' } } }],
+        },
+        raw('1', CHAT_A, '<p>@Joe AbiJaoudi deploy</p>', 'Bo', '2026-10-26T11:00:00Z'),
       ],
     });
     const client = graph();
 
     const byBo = await searchChats(client, 'deploy', { from: 'bo' }, SCAN);
-    expect(byBo.items.map((hit) => hit.id)).toStrictEqual(['5', '3']);
+    expect(byBo.items.map((hit) => hit.id)).toStrictEqual(['5', '3', '2', '1']);
     expect(byBo.note).toContain('Only chats were searched, as asked.');
 
     // An address matches by the words of its local part: chat messages carry no address.
@@ -146,15 +165,48 @@ describe('searchChats (design 0007)', () => {
     const before = await searchChats(client, 'deploy', { until: new Date('2026-10-25T00:00:00Z') }, SCAN);
     expect(before.items).toHaveLength(0);
     const sameDay = await searchChats(client, 'deploy', { until: new Date('2026-10-26T00:00:00Z') }, SCAN);
-    expect(sameDay.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3']);
+    expect(sameDay.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3', '2', '1']);
 
     // `since` is a whole day too: an afternoon instant still includes that morning.
     const sinceToday = await searchChats(client, 'deploy', { since: new Date('2026-10-26T14:30:00Z') }, SCAN);
-    expect(sinceToday.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3']);
+    expect(sinceToday.items.map((hit) => hit.id)).toStrictEqual(['5', '4', '3', '2', '1']);
 
     const mentions = await searchChats(client, 'deploy from:bo', { mentionsMe: true }, SCAN);
-    expect(mentions.items.map((hit) => hit.id)).toStrictEqual(['5']);
+    // Matched by the user ID in mentions[], so split and shortened mentions count and plain text does not.
+    expect(mentions.items.map((hit) => hit.id)).toStrictEqual(['5', '2']);
     expect(mentions.note).toContain('KQL operators in the query were ignored');
+  });
+
+  it('stops before a chat that cannot hold a newer hit than the ones it already has', async () => {
+    server.route('/v1.0/me/chats', (_req, res) =>
+      respondJson(res, 200, {
+        value: [
+          { id: CHAT_A, chatType: 'group', lastMessagePreview: { createdDateTime: '2026-10-26T15:00:00Z' } },
+          { id: CHAT_B, chatType: 'group', lastMessagePreview: { createdDateTime: '2026-10-20T09:00:00Z' } },
+        ],
+      }),
+    );
+    server.route(`/v1.0/chats/${encodeURIComponent(CHAT_A)}/messages`, (_req, res) =>
+      respondJson(res, 200, {
+        value: [
+          raw('2', CHAT_A, '<p>x</p>', 'Ada', '2026-10-26T15:00:00Z'),
+          raw('1', CHAT_A, '<p>x</p>', 'Ada', '2026-10-26T14:00:00Z'),
+        ],
+      }),
+    );
+    const result = await searchChats(graph(), 'x', {}, { chats: 5, limit: 2, reason: 'asked' });
+    expect(result.items.map((hit) => hit.id)).toStrictEqual(['2', '1']);
+    expect(server.requests.some((request) => request.url.includes(encodeURIComponent(CHAT_B)))).toBe(false);
+    expect(result.note).toContain('The 1 most recent chats');
+    expect(result.note).toContain('older chats were not read');
+
+    // With room for more hits, the older chat is still read.
+    server.route(`/v1.0/chats/${encodeURIComponent(CHAT_B)}/messages`, (_req, res) =>
+      respondJson(res, 200, { value: [raw('9', CHAT_B, '<p>x</p>', 'Bo', '2026-10-20T09:00:00Z')] }),
+    );
+    const wider = await searchChats(graph(), 'x', {}, { chats: 5, limit: 3, reason: 'asked' });
+    expect(wider.note).not.toContain('older chats were not read');
+    expect(wider.items.map((hit) => hit.id)).toStrictEqual(['2', '1', '9']);
   });
 
   it('says complete only about the hit limit; the chat bound is in the note', async () => {
@@ -204,6 +256,25 @@ describe('searchMessages falls back (design 0007)', () => {
     expect(result.note).toContain('ChannelMessage.Read.All is not granted');
     expect(server.requests.some((request) => request.url.includes('/search/query'))).toBe(false);
     expect(requested[0]).toMatchObject({ scopes: ['Chat.Read', 'ChannelMessage.Read.All'], silentOnly: true });
+  });
+
+  it("falls back on Graph's refusal in the exact words recorded live, so a change of wording fails a test", async () => {
+    // The 403 Graph returned on 2026-10-22, before admin consent, as quoted in search.ts; only the
+    // granted-permissions tail, which names this tenant's grants, is left out.
+    const recorded = {
+      error: {
+        code: 'Forbidden',
+        message:
+          'Access to ChatMessage in Graph API requires the following permissions: Chat.Read or Chat.ReadWrite, ' +
+          'ChannelMessage.Read.All.',
+        innerError: { date: '2026-10-22T14:03:11', 'request-id': 'r', 'client-request-id': 'c' },
+      },
+    };
+    server.route('/v1.0/search/query', (_req, res) => respondJson(res, 403, recorded));
+    routeChats({ [CHAT_A]: [raw('1', CHAT_A, '<p>deploy</p>')] });
+    const result = await searchMessages(graph(), 'deploy', {}, 25);
+    expect(result.scope).toBe('chats');
+    expect(result.items.map((hit) => hit.id)).toStrictEqual(['1']);
   });
 
   it('reports a sign-in problem as itself, not as a missing consent', async () => {

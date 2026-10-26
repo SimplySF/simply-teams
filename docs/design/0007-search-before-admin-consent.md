@@ -41,15 +41,18 @@ search the moment consent lands, with no change to how the tool is called.
 | `--chats` / `chats`    | 20 (max 100) | How many of the most recent chats to read                              |
 | `--since` and the rest | as search    | `since` bounds each chat read; the other filters apply to each message |
 
-- Chats are read most recently active first (`chat list`'s order), one at a time, up to 200
-  messages each (four pages, `since` permitting). Reading stops early in a chat once it is
-  older than `since`.
+- Chats are read most recently active first (`chat list`'s order), one at a time, up to 100
+  messages each (two pages, `since` permitting). Reading stops early in a chat once it is
+  older than `since`. The scan stops before a chat once it already holds `limit` hits that are all
+  newer than that chat's last message: no older chat can displace them. At the defaults that bounds
+  a scan at about 40 requests, and often far fewer; the note says when older chats were left unread.
 - **Matching** is on words, not KQL: every word of the query must appear in the message's text or
   subject, case-insensitively. A KQL term in the query (`from:x`, `sent>=…`, `AND`) is dropped
   rather than matched literally, and the note says so; a query that was only KQL, with no filter,
   is refused. `--from` matches the sender's name, or the words of an address's local part, since
   chat messages carry no address; `--until` is a whole day, as Graph's `sent<=` is; `--mentions-me`
-  an `@` followed by the signed-in user's name.
+  the signed-in user's ID in the message's `mentions[]`. The text is no guide: Teams splits a mention
+  into one tag per name part, and people shorten one to a first name.
 - **Hits** have 0002's search-hit shape, so `message view`, `message context` and the renderers
   take them unchanged. The `summary` is a window of the message around its first match, with the
   matched words in `**bold**` as Graph's summaries are. Hits come newest first, since there is no
@@ -62,7 +65,7 @@ search the moment consent lands, with no change to how the tool is called.
 
 `SearchResult` and `MessageContext` gain `scope` (`"all"` or `"chats"`) and, for a chat scan,
 `note`, one sentence such as: `Channels were not searched: ChannelMessage.Read.All is not granted
-to this app. The 20 most recent chats were read instead, up to 200 messages each; KQL operators in
+to this app. The 20 most recent chats were read instead, up to 100 messages each; KQL operators in
 the query were ignored.` The CLI prints the note before the results; the MCP result carries it,
 and the tools' descriptions say the fallback exists so an agent does not retry the search.
 

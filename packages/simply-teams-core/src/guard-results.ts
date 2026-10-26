@@ -59,6 +59,7 @@ const IDENTIFIERS = new Set([
   'contentType',
   'userIdentityType',
   'hitIds',
+  'mentionedUserIds',
 ]);
 
 function withheldNote(types: readonly string[]): string {
