@@ -50,9 +50,9 @@ export interface ContextThread {
   readonly where?: string;
   readonly chatId?: string;
   readonly channel?: ChannelLocation;
-  /** Matching messages in this thread. */
+  /** Matching messages among `messages`. A hit outside the window that was read is not counted. */
   readonly hits: number;
-  /** Which messages matched, so a renderer can mark them. */
+  /** Which of `messages` matched, so a renderer can mark them. */
   readonly hitIds: readonly string[];
   /** Oldest first, in 0002's shape. */
   readonly messages: readonly TeamsMessage[];
@@ -71,8 +71,10 @@ export interface MessageContext {
   readonly searchComplete: boolean;
   /** In relevance order of their first hit. */
   readonly threads: readonly ContextThread[];
-  /** Threads beyond `threads`, or that could not be read. */
+  /** Threads beyond `threads`, or that could not be read or fitted. Counts threads, never hits. */
   readonly skipped: number;
+  /** Hits whose ref names no message, so they belong to no thread. Counts hits. */
+  readonly unplaced: number;
   /** The budget cut something. */
   readonly truncated: boolean;
 }
@@ -173,40 +175,39 @@ function size(message: TeamsMessage): number {
   return message.text.length + (message.subject?.length ?? 0) + (message.from?.name?.length ?? 0) + 32;
 }
 
+/** How far each message is from the nearest hit, by position; `Infinity` when there is no hit. */
+function distances(messages: readonly TeamsMessage[], hitIds: ReadonlySet<string>): number[] {
+  const hits = messages.flatMap((message, index) => (hitIds.has(message.id) ? [index] : []));
+  return messages.map((_, index) => Math.min(...hits.map((hit) => Math.abs(hit - index))));
+}
+
 /**
- * Drops messages from the ends furthest from the hits until the thread fits in `room`. Returns
- * the kept messages, or nothing when even the hits alone do not fit.
+ * Drops the message furthest from any hit, one at a time, until the thread fits in `room`; ties go
+ * to the later message, which is the one further from a channel's root post. Hits are never
+ * dropped, so a thread with hits at both ends loses its middle rather than being skipped. Returns
+ * nothing when the hits alone do not fit, or when no hit was in the window that was read.
  */
 function trimToFit(
   messages: readonly TeamsMessage[],
   hitIds: ReadonlySet<string>,
   room: number,
 ): { kept: TeamsMessage[]; truncated: boolean } | undefined {
+  if (!messages.some((message) => hitIds.has(message.id))) return undefined;
   const kept = [...messages];
   let total = kept.reduce((sum, message) => sum + size(message), 0);
   let truncated = false;
-  while (total > room && kept.length > 0) {
-    const first = kept[0];
-    const last = kept.at(-1);
-    const firstIsHit = first !== undefined && hitIds.has(first.id);
-    const lastIsHit = last !== undefined && hitIds.has(last.id);
-    let dropped: TeamsMessage | undefined;
-    if (!lastIsHit) dropped = kept.pop();
-    else if (!firstIsHit) dropped = kept.shift();
-    else return undefined;
+  while (total > room) {
+    const away = distances(kept, hitIds);
+    const furthest = Math.max(...away);
+    if (furthest === 0) return undefined; // Only hits are left, and they do not fit.
+    const index = away.lastIndexOf(furthest);
+    const [dropped] = kept.splice(index, 1);
     if (dropped !== undefined) total -= size(dropped);
     truncated = true;
   }
-  // A thread whose hits were not in the window that was read trims down to nothing: skip it.
-  if (kept.length === 0) return undefined;
   return { kept, truncated };
 }
 
-/**
- * The threads behind a question, in one call (design 0006): search, group the hits into threads,
- * read each thread around its hit, and return them in relevance order within a budget. Threads are
- * read one at a time, because Graph throttles chat and channel reads per app and tenant.
- */
 function checkOptions(options: ContextOptions): void {
   if (!Number.isInteger(options.threads) || options.threads < 1 || options.threads > MAX_THREADS) {
     throw new ConfigError(`Threads must be a whole number from 1 to ${MAX_THREADS}.`);
@@ -219,7 +220,12 @@ function checkOptions(options: ContextOptions): void {
   }
 }
 
-/** Reads one thread, or nothing when it cannot be read: a meeting chat the user has left (403), a message deleted since it was indexed (404). */
+/**
+ * Reads one thread, or nothing when it cannot be read: a meeting chat the user has left (403), a
+ * message deleted since it was indexed (404). Anything else, throttling and server errors that
+ * outlasted the retries included, fails the call: skipping those would hide a struggling tenant
+ * behind "more threads not shown" while the loop kept sending it requests.
+ */
 async function readThread(
   graph: GraphClient,
   group: Group,
@@ -229,7 +235,9 @@ async function readThread(
     const view = await viewMessage(graph, group.ref, context);
     return { messages: view.thread.length === 0 ? [view.message] : [...view.thread], warnings: view.warnings };
   } catch (error) {
-    if ((error instanceof AuthError && error.status === 403) || error instanceof HttpError) return undefined;
+    if ((error instanceof AuthError && error.status === 403) || (error instanceof HttpError && error.status === 404)) {
+      return undefined;
+    }
     throw error;
   }
 }
@@ -240,6 +248,11 @@ function describeGroup(group: Group, namer: Namer): Promise<string | undefined> 
     : namer.channel({ teamId: group.ref.teamId, channelId: group.ref.channelId });
 }
 
+/**
+ * The threads behind a question, in one call (design 0006): search, group the hits into threads,
+ * read each thread around its hit, and return them in relevance order within a budget. Threads are
+ * read one at a time, because Graph throttles chat and channel reads per app and tenant.
+ */
 export async function gatherMessageContext(
   graph: GraphClient,
   text: string,
@@ -253,7 +266,7 @@ export async function gatherMessageContext(
   const namer = new Namer(graph);
   const threads: ContextThread[] = [];
   const wanted = groups.slice(0, options.threads);
-  let skipped = unreadable + (groups.length - wanted.length);
+  let skipped = groups.length - wanted.length;
   let used = 0;
   let truncated = false;
 
@@ -280,6 +293,9 @@ export async function gatherMessageContext(
       continue;
     }
     used += fit.kept.reduce((sum, message) => sum + size(message), 0);
+    // Only the hits that are shown: a later hit in a chat can fall outside the window around the first.
+    const shown = new Set(fit.kept.map((message) => message.id));
+    const shownHits = group.ids.filter((id) => shown.has(id));
     truncated = truncated || fit.truncated;
     threads.push({
       ref: group.first.ref,
@@ -288,8 +304,8 @@ export async function gatherMessageContext(
       chatId: group.ref.kind === 'chatMessage' ? group.ref.chatId : undefined,
       channel:
         group.ref.kind === 'channelMessage' ? { teamId: group.ref.teamId, channelId: group.ref.channelId } : undefined,
-      hits: group.ids.length,
-      hitIds: group.ids,
+      hits: shownHits.length,
+      hitIds: shownHits,
       messages: fit.kept,
       truncated: fit.truncated,
       warnings: view.warnings,
@@ -304,6 +320,7 @@ export async function gatherMessageContext(
     searchComplete: search.complete,
     threads,
     skipped,
+    unplaced: unreadable,
     truncated,
   };
 }
