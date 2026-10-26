@@ -101,7 +101,7 @@ export { searchMessages, type SearchOptions } from './search.js';
 
 // --- Cleaning what an agent sees (design 0005) ---
 export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
-export { cleanResult, restoreInput, type GuardReport } from './guard-results.js';
+export { cleanResult, rehideDeep, restoreInput, type GuardReport } from './guard-results.js';
 
 // --- Shared rendering ---
 export { formatKeyValue, formatTable, type Column, type Pair } from './output.js';

@@ -86,6 +86,7 @@ describe('@simplysf/simply-teams-core', () => {
         'TeamsGuard',
         'secretsIn',
         'cleanResult',
+        'rehideDeep',
         'restoreInput',
         // rendering
         'formatKeyValue',

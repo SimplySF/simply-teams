@@ -179,8 +179,23 @@ export function cleanResult<T>(guard: TeamsGuard, value: T): { value: T; report:
 }
 
 /**
+ * Every string in `value` with this guard's real values put back behind their placeholders
+ * ({@link TeamsGuard.rehide}). For errors, which can quote a restored value in a form the
+ * detectors do not recognise (design 0005).
+ */
+export function rehideDeep<T>(guard: TeamsGuard, value: T): T {
+  if (typeof value === 'string') return guard.rehide(value) as T;
+  if (Array.isArray(value)) return value.map((item: unknown) => rehideDeep(guard, item)) as T;
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, rehideDeep(guard, item)]),
+  ) as T;
+}
+
+/**
  * Puts real values back into what an agent sends: every string in a tool's input, so a reply that
- * mentions "[EMAIL-1]", or a search for it, reaches Teams with the real address (design 0005).
+ * mentions "[EMAIL-1]", or a search for it, reaches Teams with the real address. Only email and
+ * phone placeholders are restored (design 0005).
  */
 export function restoreInput<T>(guard: TeamsGuard, value: T): T {
   if (typeof value === 'string') return guard.restore(value) as T;

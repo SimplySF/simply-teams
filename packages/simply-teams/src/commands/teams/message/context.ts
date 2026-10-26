@@ -98,8 +98,11 @@ export default class MessageContextCommand extends TeamsCommand<typeof MessageCo
     } else {
       this.logSafe(result.threads.map(renderThread).join('\n\n'));
     }
-    const more =
-      result.skipped === 0 ? '' : ` (${result.skipped} more thread${result.skipped === 1 ? '' : 's'} not shown)`;
+    const notes = [
+      result.skipped === 0 ? '' : `${result.skipped} more thread${result.skipped === 1 ? '' : 's'} not shown`,
+      result.unplaced === 0 ? '' : `${result.unplaced} hit${result.unplaced === 1 ? '' : 's'} in no readable thread`,
+    ].filter((note) => note !== '');
+    const more = notes.length === 0 ? '' : ` (${notes.join('; ')})`;
     const cut = result.truncated ? ', trimmed to fit' : '';
     this.log(
       `\n${result.threads.length} thread${result.threads.length === 1 ? '' : 's'} from ${result.searched} hits${more}${cut}.`,

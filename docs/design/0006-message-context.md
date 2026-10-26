@@ -48,15 +48,16 @@ interface MessageContext {
   searched: number; // hits the search returned
   searchComplete: boolean; // false when more hits were available than were read
   threads: ContextThread[]; // in relevance order of their first hit
-  skipped: number; // threads beyond `threads`, or that could not be read
+  skipped: number; // threads beyond `threads`, or that could not be read or fitted
+  unplaced: number; // hits whose ref names no message, so they belong to no thread
   truncated: boolean; // the budget cut something
 }
 interface ContextThread {
   ref: string; // a ref `message view` accepts: the first hit
   kind: 'channel' | 'chat';
   where?: string; // "Team / Channel", or a chat's topic or type, when it could be named
-  hits: number; // matching messages in this thread
-  hitIds: string[]; // which messages matched, so a renderer can mark them
+  hits: number; // matching messages among `messages`
+  hitIds: string[]; // which of `messages` matched, so a renderer can mark them
   messages: TeamsMessage[]; // oldest first, 0002's shape, text already rendered
   truncated: boolean; // messages dropped from this thread to fit the budget
   warnings: string[]; // from the view, e.g. a thread with more replies than were read
@@ -70,13 +71,17 @@ interface ContextThread {
 - **Reading.** Each thread is one `viewMessage(firstHit, context)`: the root and the replies around
   a channel hit, or the messages either side of a chat hit. Threads are read one at a time, because
   Graph throttles per app and tenant. A thread that cannot be read (a meeting chat the user has
-  left answers 403) is skipped and counted, not fatal.
+  left answers 403, a message deleted since it was indexed answers 404) is skipped and counted, not
+  fatal. Any other failure, a 429 or 5xx that outlasted the retries included, fails the call, so a
+  throttled tenant is reported rather than hidden behind "more threads not shown".
 - **Naming.** `where` is best effort: team and channel names come from `team list` and
   `channel list`, a chat's topic or type from `GET /chats/{id}`, each fetched once per run. A
   lookup that fails leaves `where` unset; it never fails the call.
-- **Budget.** Text is counted as it is added. A thread that would cross `maxChars` is trimmed from
-  the ends furthest from its hits until it fits or holds only its hits; one that cannot fit at all
-  is skipped. The result and the thread both say when that happened.
+- **Budget.** Text is counted as it is added. A thread that would cross `maxChars` loses the message
+  furthest from any hit, one at a time, until it fits or holds only its hits; a thread whose root
+  and last reply both match loses its middle. One whose hits alone cannot fit is skipped. The result
+  and the thread both say when that happened. A thread's `hits` count only the hits it shows: a
+  later hit in a chat can fall outside the window read around the first.
 - **Rendering.** The CLI prints each thread as a transcript (0002's `renderTranscript`) under a
   heading naming where it is and how many messages matched, with the matching messages marked
   `◀`, and ends with a line such as `3 threads from 11 hits (2 more threads not shown).` Under

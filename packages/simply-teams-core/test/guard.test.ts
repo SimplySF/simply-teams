@@ -97,7 +97,8 @@ describe('TeamsGuard', () => {
     }
   });
 
-  it('replaces each kind of personal data with a placeholder, and restores it', () => {
+  it('replaces each kind of personal data with a placeholder, and restores only addresses and phone numbers', () => {
+    const restorable = new Set(['email address', 'phone number']);
     for (const [type, samples] of Object.entries(PII)) {
       for (const sample of samples) {
         const guard = new TeamsGuard();
@@ -106,9 +107,19 @@ describe('TeamsGuard', () => {
         expect(out, type).not.toContain(sample);
         expect(out, type).toMatch(/\[[A-Z_]+-1\]/);
         expect(tally[type], type).toBe(1);
-        expect(guard.restore(out), type).toBe(`contact: ${sample} today`);
+        // A card, SSN or IBAN seen in one chat must not be carried by an agent into another.
+        expect(guard.restore(out), type).toBe(restorable.has(type) ? `contact: ${sample} today` : out);
       }
     }
+  });
+
+  it('puts every value it replaced back behind its placeholder, plain or URL-encoded', () => {
+    const guard = new TeamsGuard();
+    guard.redact('ada@contoso.com and ada@contoso.com.au');
+    expect(guard.rehide('GET /users/ada%40contoso.com failed; also /users/ada@contoso.com.au')).toBe(
+      'GET /users/[EMAIL-1] failed; also /users/[EMAIL-2]',
+    );
+    expect(guard.rehide('nothing here')).toBe('nothing here');
   });
 
   it('leaves benign text alone: placeholders, references to secrets, and numbers that only look personal', () => {
