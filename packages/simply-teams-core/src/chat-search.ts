@@ -20,11 +20,18 @@ import { buildSearchQuery, type SearchFilters } from './kql.js';
 import type { TeamsMessage, TeamsSearchHit } from './messages.js';
 import { listChatMessages, listChats, type SearchResult } from './operations.js';
 
+/** The scoped terms and operators Teams' KQL documents; anything else in a query is a word to find. */
+const KQL_TERM =
+  /^(?:from|to|sentto|sent|received|ismentioned|hasattachment|mentions|subject|body|size|importance)\s*[:<>=]/i;
+const KQL_OPERATOR = /^(?:AND|OR|NOT|NEAR)$/;
+
+const DAY_MS = 86_400_000;
+
 /** How the chat scan is bounded (design 0007). */
 export interface ChatSearchOptions {
   /** How many of the most recent chats to read. */
   readonly chats: number;
-  /** Stop once this many hits are found. */
+  /** The most hits to return. Every chat asked for is read, so the newest hits across them win. */
   readonly limit: number;
   /** Why channels were not searched; shapes the note. */
   readonly reason: 'consent' | 'asked';
@@ -48,7 +55,7 @@ export function searchWords(text: string): { words: string[]; droppedKql: boolea
   for (const raw of text.split(/\s+/)) {
     const token = raw.replaceAll('"', '').trim();
     if (token === '') continue;
-    if (/^(?:AND|OR|NOT)$/.test(token) || /^[\w.-]+[:<>=]/.test(token)) {
+    if (KQL_OPERATOR.test(token) || KQL_TERM.test(token)) {
       droppedKql = true;
       continue;
     }
@@ -80,6 +87,24 @@ export function summarize(text: string, words: readonly string[]): string {
   return `${start > 0 ? '…' : ''}${window}${end < flat.length ? '…' : ''}`;
 }
 
+/**
+ * Whether a sender matches `--from`. Chat messages carry a display name and a user ID, never an
+ * address, so an address is matched by the words of its local part: `ada.lovelace@contoso.com`
+ * finds "Ada Lovelace".
+ */
+function senderMatches(message: TeamsMessage, from: string): boolean {
+  const name = (message.from?.name ?? '').toLowerCase();
+  const wanted = from.trim().toLowerCase();
+  if (name.includes(wanted)) return true;
+  const at = wanted.indexOf('@');
+  if (at <= 0) return false;
+  const parts = wanted
+    .slice(0, at)
+    .split(/[._-]+/)
+    .filter((part) => part !== '');
+  return parts.length > 0 && parts.every((part) => name.includes(part));
+}
+
 function matches(
   message: TeamsMessage,
   words: readonly string[],
@@ -89,15 +114,12 @@ function matches(
   if (message.kind === 'event' || message.deleted) return false;
   const haystack = `${message.subject ?? ''}\n${message.text}`.toLowerCase();
   if (!words.every((word) => haystack.includes(word))) return false;
-  if (filters.from !== undefined && filters.from.trim() !== '') {
-    const wanted = filters.from.trim().toLowerCase();
-    const sender = `${message.from?.name ?? ''} ${message.from?.email ?? ''}`.toLowerCase();
-    if (!sender.includes(wanted)) return false;
-  }
+  if (filters.from !== undefined && filters.from.trim() !== '' && !senderMatches(message, filters.from)) return false;
+  // Graph's `sent<=` is a whole day; the scan keeps the same meaning.
   if (
     filters.until !== undefined &&
     message.createdAt !== undefined &&
-    Date.parse(message.createdAt) > filters.until.getTime()
+    Date.parse(message.createdAt) >= filters.until.getTime() + DAY_MS
   ) {
     return false;
   }
@@ -120,13 +142,15 @@ function hitFrom(message: TeamsMessage, words: readonly string[]): TeamsSearchHi
   };
 }
 
-function note(options: ChatSearchOptions, droppedKql: boolean): string {
+function note(options: ChatSearchOptions, droppedKql: boolean, unreadable: number): string {
   const why =
     options.reason === 'consent'
       ? 'Channels were not searched: ChannelMessage.Read.All is not granted to this app.'
       : 'Only chats were searched, as asked.';
-  const kql = droppedKql ? '; KQL operators in the query were ignored' : '';
-  return `${why} The ${options.chats} most recent chats were read instead, up to ${PER_CHAT} messages each${kql}.`;
+  const parts = [`The ${options.chats} most recent chats were read instead, up to ${PER_CHAT} messages each`];
+  if (unreadable > 0) parts.push(`${unreadable} of them could not be read`);
+  if (droppedKql) parts.push('KQL operators in the query were ignored');
+  return `${why} ${parts.join('; ')}.`;
 }
 
 /**
@@ -146,12 +170,18 @@ export async function searchChats(
   // Validates the query the same way search does: words, or at least one filter.
   const query = buildSearchQuery(text, filters);
   const { words, droppedKql } = searchWords(text);
+  const filtered = [filters.from, filters.since, filters.until, filters.mentionsMe === true || undefined].some(
+    (value) => value !== undefined && value !== '',
+  );
+  if (words.length === 0 && !filtered) {
+    throw new ConfigError('A chat scan matches words, not KQL: give words to look for, or a filter flag.');
+  }
   const myName = filters.mentionsMe === true ? (await graph.me()).displayName : undefined;
 
   const chats = await listChats(graph, options.chats);
   const hits: TeamsSearchHit[] = [];
   let pages = chats.pages;
-  let complete = chats.complete;
+  let unreadable = 0;
 
   /* One chat at a time: fanning out would trip Graph's per-app throttling. */
   /* eslint-disable no-await-in-loop */
@@ -161,11 +191,13 @@ export async function searchChats(
       messages = await listChatMessages(graph, chat.id, { since: filters.since, limit: PER_CHAT });
     } catch (error) {
       // A meeting chat the user has left answers 403 (0002): skip it, like everything else does.
-      if (error instanceof AuthError && error.status === 403) continue;
+      if (error instanceof AuthError && error.status === 403) {
+        unreadable += 1;
+        continue;
+      }
       throw error;
     }
     pages += messages.pages;
-    if (!messages.complete) complete = false;
     for (const message of messages.items) {
       if (matches(message, words, filters, myName)) hits.push(hitFrom(message, words));
     }
@@ -173,13 +205,13 @@ export async function searchChats(
   /* eslint-enable no-await-in-loop */
 
   hits.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-  if (hits.length > options.limit) complete = false;
+  // The chat and per-chat bounds are stated in the note; `complete` answers only whether `limit` cut hits.
   return {
     query,
     items: hits.slice(0, options.limit),
     pages,
-    complete,
+    complete: hits.length <= options.limit,
     scope: 'chats',
-    note: note(options, droppedKql),
+    note: note(options, droppedKql, unreadable),
   };
 }

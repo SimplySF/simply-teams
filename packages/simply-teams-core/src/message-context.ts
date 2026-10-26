@@ -24,15 +24,8 @@ import {
   type TeamsMessage,
   type TeamsSearchHit,
 } from './messages.js';
-import {
-  listChannels,
-  listTeams,
-  MAX_CONTEXT,
-  SCOPES,
-  searchMessages,
-  type SearchOptions,
-  viewMessage,
-} from './operations.js';
+import { listChannels, listTeams, MAX_CONTEXT, SCOPES, viewMessage } from './operations.js';
+import { searchMessages, type SearchOptions } from './search.js';
 import { parseRef, type TeamsRef } from './refs.js';
 
 /** How a context call is bounded (design 0006). */

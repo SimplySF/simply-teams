@@ -16,7 +16,6 @@
 
 import { AuthError, ConfigError, HttpError } from './errors.js';
 import type { GraphClient, ListResult } from './graph-client.js';
-import { DEFAULT_CHATS, searchChats } from './chat-search.js';
 import { buildSearchQuery, type SearchFilters } from './kql.js';
 import {
   type GraphChat,
@@ -74,19 +73,6 @@ export interface SearchResult extends ListResult<TeamsSearchHit> {
   readonly note?: string;
 }
 
-/** How a search may fall back to the user's chats (design 0007). */
-export interface SearchOptions {
-  /** Read the chats without trying Graph search first. */
-  readonly chatsOnly?: boolean;
-  /** How many recent chats a chat scan reads; {@link DEFAULT_CHATS} when omitted. */
-  readonly chats?: number;
-}
-
-/** Graph refusing search for want of the admin-only scope: the one failure a chat scan answers. */
-function refusedForChannelScope(error: unknown): boolean {
-  return error instanceof AuthError && error.status === 403 && error.message.includes('ChannelMessage.Read.All');
-}
-
 interface SearchResponse {
   readonly value?: ReadonlyArray<{
     readonly hitsContainers?: ReadonlyArray<{
@@ -99,29 +85,10 @@ interface SearchResponse {
 /**
  * Searches the messages the signed-in user can see. Graph cannot sort message hits and its
  * `total` counts only the current page (both documented), so neither is offered: results come in
- * Graph's relevance order, and completeness is reported from `moreResultsAvailable`.
- *
- * Until an administrator has consented to `ChannelMessage.Read.All`, Graph refuses the search
- * outright; the user's recent chats are then read instead (design 0007), and the result says so.
+ * Graph's relevance order, and completeness is reported from `moreResultsAvailable`. The fallback
+ * to the user's chats when the tenant has not consented lives in `search.ts` (design 0007).
  */
-export async function searchMessages(
-  graph: GraphClient,
-  text: string,
-  filters: SearchFilters,
-  limit: number,
-  options: SearchOptions = {},
-): Promise<SearchResult> {
-  const chats = options.chats ?? DEFAULT_CHATS;
-  if (options.chatsOnly === true) return searchChats(graph, text, filters, { chats, limit, reason: 'asked' });
-  try {
-    return await graphSearch(graph, text, filters, limit);
-  } catch (error) {
-    if (!refusedForChannelScope(error)) throw error;
-    return searchChats(graph, text, filters, { chats, limit, reason: 'consent' });
-  }
-}
-
-async function graphSearch(
+export async function searchGraph(
   graph: GraphClient,
   text: string,
   filters: SearchFilters,

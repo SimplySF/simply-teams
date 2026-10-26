@@ -27,12 +27,12 @@ search the moment consent lands, with no change to how the tool is called.
 
 ### When it applies
 
-| Situation                                                 | What `message search` and `message context` do            |
-| --------------------------------------------------------- | --------------------------------------------------------- |
-| Graph search succeeds                                     | as before; `scope: "all"`                                 |
-| Graph search answers 403 naming `ChannelMessage.Read.All` | the chat scan, `scope: "chats"`, with a `note` saying why |
-| `--chats-only` / `chatsOnly`                              | the chat scan without trying Graph search first           |
-| Graph search fails for any other reason                   | that failure, as before                                   |
+| Situation                                                                                                                                                                                                   | What `message search` and `message context` do            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Graph search succeeds                                                                                                                                                                                       | as before; `scope: "all"`                                 |
+| The token for the search scopes cannot be had silently (the broker reports consent is missing), or the token's scope list lacks `ChannelMessage.Read.All`, or Graph answers 403 naming it (an opaque token) | the chat scan, `scope: "chats"`, with a `note` saying why |
+| `--chats-only` / `chatsOnly`                                                                                                                                                                                | the chat scan without trying Graph search first           |
+| Graph search fails for any other reason                                                                                                                                                                     | that failure, as before                                   |
 
 ### The chat scan
 
@@ -46,13 +46,16 @@ search the moment consent lands, with no change to how the tool is called.
   older than `since`.
 - **Matching** is on words, not KQL: every word of the query must appear in the message's text or
   subject, case-insensitively. A KQL term in the query (`from:x`, `sent>=…`, `AND`) is dropped
-  rather than matched literally, and the note says so. `--from` matches the sender's name or
-  address; `--until` the time; `--mentions-me` an `@` followed by the signed-in user's name.
+  rather than matched literally, and the note says so; a query that was only KQL, with no filter,
+  is refused. `--from` matches the sender's name, or the words of an address's local part, since
+  chat messages carry no address; `--until` is a whole day, as Graph's `sent<=` is; `--mentions-me`
+  an `@` followed by the signed-in user's name.
 - **Hits** have 0002's search-hit shape, so `message view`, `message context` and the renderers
   take them unchanged. The `summary` is a window of the message around its first match, with the
   matched words in `**bold**` as Graph's summaries are. Hits come newest first, since there is no
   relevance to rank by, and `complete` is false when a bound was hit: more chats than were read,
-  a chat longer than one page, or more hits than `limit`.
+  a chat longer than one page, or more hits than `limit`. Chats that could not be read are counted in
+  the note.
 - `message context` reads the hit threads as 0006 describes; chat hits need only `Chat.Read`.
 
 ### What the caller is told
@@ -87,8 +90,11 @@ cannot be read (a meeting chat the user has left, 403) is skipped, not fatal.
 
 1. Core `chat-search.ts`: `searchChats(graph, text, filters, options)`; word matching, the
    summary window, the bounds and the note.
-2. Core `operations.ts`: `SearchOptions` (`chatsOnly`, `chats`); `searchMessages` tries Graph, falls
-   back on the consent refusal; `SearchResult.scope` and `note`.
+2. Core `search.ts`: `SearchOptions` (`chatsOnly`, `chats`) and `searchMessages`, which asks
+   `GraphClient.consented(SCOPES.search)` first — a silent token request, since with the broker a
+   missing consent fails at the token, never at Graph — and falls back on a `false`, or on Graph's
+   refusal naming the scope when the token is opaque. `operations.ts` keeps the Graph search as
+   `searchGraph`; `SearchResult` gains `scope` and `note`.
 3. Core `message-context.ts`: `ContextOptions.search` passed through; `MessageContext.scope`/`note`.
 4. CLI: `fallbackFlags` (`--chats-only`, `--chats`) on `message search` and `message context`;
    the note printed first.
@@ -102,8 +108,9 @@ cannot be read (a meeting chat the user has left, 403) is skipped, not fatal.
   first with a bolded summary and a `ref` `message view` accepts; the chat and per-chat bounds set
   `complete: false`; a 403 chat is skipped; an empty query is refused before any request; only
   `Chat.Read` and `User.Read` are asked for.
-- **core/operations**: Graph search's 403 naming the scope falls back and sets `scope`/`note`; any
-  other failure does not; `chatsOnly` skips Graph search.
+- **core/search**: a token that cannot be had silently for the search scopes falls back before Graph
+  is asked; a token holding them searches Graph; an opaque token's 403 naming the scope falls back
+  and any other failure does not; `chatsOnly` skips Graph search.
 - **core/message-context**: threads come from chat hits under the fallback, and the note is carried.
 - **CLI** (nock): `--chats-only` prints the note then the hits; the fallback on a 403.
 - **MCP**: the inputs reach core; the result carries `scope` and `note`.

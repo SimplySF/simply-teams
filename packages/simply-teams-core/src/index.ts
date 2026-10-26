@@ -97,6 +97,8 @@ export {
   type MessageContext,
 } from './message-context.js';
 
+export { searchMessages, type SearchOptions } from './search.js';
+
 // --- Cleaning what an agent sees (design 0005) ---
 export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
 export { cleanResult, restoreInput, type GuardReport } from './guard-results.js';
@@ -155,7 +157,7 @@ export {
   resolveMentions,
   resolveTeamId,
   SCOPES,
-  searchMessages,
+  searchGraph,
   sendPlanned,
   viewMessage,
   type ChannelMessageOptions,
@@ -163,7 +165,6 @@ export {
   type WriteInput,
   type MessageListOptions,
   type MessageView,
-  type SearchOptions,
   type SearchResult,
   type TeamsChannel,
   type TeamsTeam,

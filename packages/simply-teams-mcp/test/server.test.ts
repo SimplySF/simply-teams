@@ -38,6 +38,18 @@ const tokens: TokenProvider = {
     Promise.resolve({ token: 'secret-token', source: 'broker', scopes: ['https://graph.microsoft.com/User.Read'] }),
 };
 
+/** A token that holds the read scopes, so search goes to Graph rather than falling back to the chats (0007). */
+const readTokens: TokenProvider = {
+  getToken: () =>
+    Promise.resolve({
+      token: 'secret-token',
+      source: 'broker',
+      scopes: ['User.Read', 'Chat.Read', 'ChannelMessage.Read.All'].map(
+        (scope) => `https://graph.microsoft.com/${scope}`,
+      ),
+    }),
+};
+
 function context(overrides: Record<string, string> = {}, tokenProvider: TokenProvider = tokens) {
   return createContext({
     env: { TEAMS_CLIENT_ID: CLIENT, ...overrides },
@@ -193,7 +205,11 @@ describe('cleaning (design 0005)', () => {
       respondJson(res, 200, { value: [{ id: ch, displayName: 'General' }] }),
     );
 
-    const result = await invokeTool(spec('teams_message_context'), context(), { query: 'x', threads: 1, context: 1 });
+    const result = await invokeTool(spec('teams_message_context'), context({}, readTokens), {
+      query: 'x',
+      threads: 1,
+      context: 1,
+    });
     const body = payload(result) as {
       threads: Array<{ where?: string; hitIds: string[]; messages: Array<{ text: string; ref: string }> }>;
       cleaned: { summary: string };

@@ -38,7 +38,7 @@ export function renderAuthStatus(status: AuthStatus): string {
     lines.push(
       '',
       'Message search needs ChannelMessage.Read.All, which only a tenant administrator can consent to ' +
-        'for this app registration. Graph refuses chat search too until it is granted.',
+        'for this app registration. Until it is granted, search reads your recent chats instead and says so.',
     );
   }
   return lines.join('\n');

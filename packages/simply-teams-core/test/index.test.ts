@@ -122,6 +122,7 @@ describe('@simplysf/simply-teams-core', () => {
         'resolveChannel',
         'resolveTeamId',
         'SCOPES',
+        'searchGraph',
         'searchMessages',
         'viewMessage',
         'planChannelPost',
