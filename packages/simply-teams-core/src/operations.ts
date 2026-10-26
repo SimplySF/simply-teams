@@ -48,6 +48,8 @@ export const SCOPES = {
   users: ['User.ReadBasic.All'],
   channelSend: ['ChannelMessage.Send'],
   chatSend: ['ChatMessage.Send'],
+  meetings: ['OnlineMeetings.Read'],
+  transcripts: ['OnlineMeetingTranscript.Read.All'],
 } as const;
 
 /** Graph's documented example page size for message search; the true maximum is unverified (0002). */

@@ -30,6 +30,10 @@ Use the smallest relevant topic document rather than loading the whole directory
 - [Search before admin consent](docs/design/0007-search-before-admin-consent.md): when Graph
   refuses search for want of `ChannelMessage.Read.All`, the user's recent chats are read on the
   client instead (`Chat.Read` only), the result says so in `note`, and `--chats-only` asks for it.
+- [Meeting transcripts](docs/design/0008-meeting-transcripts.md): `meeting list` names the meetings
+  a user was in (their meeting chats); `meeting transcript` turns a join link or meeting chat into
+  the transcript as utterances, narrowed by `--find` and bounded by a budget. Two scopes join the
+  read set: `OnlineMeetings.Read` (user) and `OnlineMeetingTranscript.Read.All` (admin).
 
 The package [README](packages/simply-teams/README.md) is the generated user-facing command
 reference. Update command metadata first, then regenerate it as described in `CONTRIBUTING.md`.

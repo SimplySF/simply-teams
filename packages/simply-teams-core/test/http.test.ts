@@ -69,6 +69,22 @@ describe('HttpTransport', () => {
     });
   });
 
+  it('reads a body as text under the asked-for Accept header, with the same token handling (design 0008)', async () => {
+    server.route('/v1.0/vtt', (req, res) => {
+      if (req.headers.authorization === 'Bearer token-1') {
+        respondJson(res, 401, { error: { code: 'InvalidAuthenticationToken', message: 'expired' } });
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/vtt', 'x-accept': req.headers.accept ?? '' });
+      res.end('WEBVTT\n\n{"not": "parsed"}');
+    });
+
+    const body = await transport().text({ method: 'GET', path: '/vtt', accept: 'text/vtt' });
+
+    expect(body).toBe('WEBVTT\n\n{"not": "parsed"}');
+    expect(server.requests.map((request) => request.url)).toStrictEqual(['/v1.0/vtt', '/v1.0/vtt']);
+  });
+
   it('joins an array query value with commas, the way OData reads $select', async () => {
     server.route('/v1.0/me', (req, res) => {
       respondJson(res, 200, { url: req.url });

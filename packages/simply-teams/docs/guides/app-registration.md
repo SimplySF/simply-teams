@@ -37,16 +37,18 @@ tokens to the app. Without it, sign-in fails with a redirect URI mismatch.
 ## 3. Add exactly these permissions
 
 Go to **API permissions → Add a permission → Microsoft Graph → Delegated permissions**. Add these
-six, and remove any others, including the default `User.Read` if it is listed twice:
+eight, and remove any others, including the default `User.Read` if it is listed twice:
 
-| Permission                | Who can consent      | Needed by                                                         |
-| ------------------------- | -------------------- | ----------------------------------------------------------------- |
-| `User.Read`               | each user            | `auth status`, `auth login`                                       |
-| `User.ReadBasic.All`      | each user            | showing senders' names                                            |
-| `Chat.Read`               | each user            | `chat list`, `chat messages`, `message view` for chats            |
-| `Team.ReadBasic.All`      | each user            | `team list`, finding a team by name                               |
-| `Channel.ReadBasic.All`   | each user            | `channel list`, finding a channel by name                         |
-| `ChannelMessage.Read.All` | **an administrator** | `message search`, `channel messages`, `message view` for channels |
+| Permission                         | Who can consent      | Needed by                                                         |
+| ---------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| `User.Read`                        | each user            | `auth status`, `auth login`                                       |
+| `User.ReadBasic.All`               | each user            | showing senders' names                                            |
+| `Chat.Read`                        | each user            | `chat list`, `chat messages`, `message view` for chats            |
+| `Team.ReadBasic.All`               | each user            | `team list`, finding a team by name                               |
+| `Channel.ReadBasic.All`            | each user            | `channel list`, finding a channel by name                         |
+| `ChannelMessage.Read.All`          | **an administrator** | `message search`, `channel messages`, `message view` for channels |
+| `OnlineMeetings.Read`              | each user            | `meeting transcript`: finding the meeting behind a join link      |
+| `OnlineMeetingTranscript.Read.All` | **an administrator** | `meeting transcript`: reading the transcript                      |
 
 **Use these exact names.** The broker does not stand in a broader grant for a narrower request: an
 app consented for `Chat.ReadWrite` but not `Chat.Read` still fails a `Chat.Read` request. Nor
@@ -54,7 +56,8 @@ should it. Every scope the registration holds lands in every token it issues, so
 is more access in every agent's process for no benefit.
 
 If you would rather edit the manifest, this is the same list as `requiredResourceAccess`. The IDs
-were read from Microsoft Graph's service principal on 2026-10-21:
+were read from Microsoft Graph's service principal on 2026-10-21 (the two meeting permissions on
+2026-10-26):
 
 ```json
 "requiredResourceAccess": [
@@ -66,7 +69,9 @@ were read from Microsoft Graph's service principal on 2026-10-21:
       { "id": "f501c180-9344-439a-bca0-6cbf209fd270", "type": "Scope" },
       { "id": "485be79e-c497-4b35-9400-0e3fa7f2a5d4", "type": "Scope" },
       { "id": "9d8982ae-4365-4f57-95e9-d6032a4c0b87", "type": "Scope" },
-      { "id": "767156cb-16ae-4d10-8f8b-41b657c8c8c8", "type": "Scope" }
+      { "id": "767156cb-16ae-4d10-8f8b-41b657c8c8c8", "type": "Scope" },
+      { "id": "9be106e1-f4e3-4df5-bdff-e4bc531cbe43", "type": "Scope" },
+      { "id": "30b87d18-ebb1-45db-97f8-82ccb1f0190c", "type": "Scope" }
     ]
   }
 ]
@@ -90,9 +95,10 @@ posting is meant to happen. Then sign in to it with `simply teams auth login --a
 
 ## 4. Grant admin consent (an administrator)
 
-`ChannelMessage.Read.All` needs a tenant administrator's consent. **Without it, Graph refuses all
-message search, chats included**, along with the channel-message commands. Everything else works
-without it.
+`ChannelMessage.Read.All` and `OnlineMeetingTranscript.Read.All` need a tenant administrator's
+consent. **Without the first, Graph refuses all message search, chats included**, along with the
+channel-message commands; without the second, `meeting transcript` fails. Everything else works
+without them, and one consent covers both.
 
 An administrator can grant it from **API permissions → Grant admin consent for <tenant>**, or by
 opening this link:
@@ -102,7 +108,7 @@ https://login.microsoftonline.com/<tenant-id>/adminconsent?client_id=<client-id>
 ```
 
 You don't have to build that link yourself. Once a user has signed in, `simply teams auth login`
-prints it with the right IDs filled in whenever the scope is missing. For the US government clouds,
+prints it with the right IDs filled in whenever either scope is missing. For the US government clouds,
 the host is `login.microsoftonline.us`.
 
 ## 5. Sign in

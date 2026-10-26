@@ -33,21 +33,23 @@ file, and an unreadable file is an error rather than silently skipped.
 ## Registering the app
 
 A tenant needs one Entra app registration for simply-teams, created once. [Registering the app](app-registration.md)
-has the exact steps: the broker redirect URI, the six delegated permissions with their IDs, and
+has the exact steps: the broker redirect URI, the eight delegated permissions with their IDs, and
 the admin-consent link. Then set `TEAMS_CLIENT_ID` to the registration's application (client) ID.
 
 ### Scopes
 
 All the scopes are delegated, so the CLI can never see more than you can already see in Teams.
 
-| Scope                     | Used for                                             | Admin consent |
-| ------------------------- | ---------------------------------------------------- | ------------- |
-| `User.Read`               | `auth status`: who you are                           | no            |
-| `User.ReadBasic.All`      | Resolving senders to names                           | no            |
-| `Chat.Read`               | Reading 1:1, group, and meeting chats                | no            |
-| `Team.ReadBasic.All`      | Listing the teams you have joined                    | no            |
-| `Channel.ReadBasic.All`   | Listing channels                                     | no            |
-| `ChannelMessage.Read.All` | Reading channel messages, and **any** message search | **yes**       |
+| Scope                              | Used for                                             | Admin consent |
+| ---------------------------------- | ---------------------------------------------------- | ------------- |
+| `User.Read`                        | `auth status`: who you are                           | no            |
+| `User.ReadBasic.All`               | Resolving senders to names                           | no            |
+| `Chat.Read`                        | Reading 1:1, group, and meeting chats                | no            |
+| `Team.ReadBasic.All`               | Listing the teams you have joined                    | no            |
+| `Channel.ReadBasic.All`            | Listing channels                                     | no            |
+| `ChannelMessage.Read.All`          | Reading channel messages, and **any** message search | **yes**       |
+| `OnlineMeetings.Read`              | Finding a meeting by its join link                   | no            |
+| `OnlineMeetingTranscript.Read.All` | Reading meeting transcripts                          | **yes**       |
 
 `ChannelMessage.Read.All` gates search entirely. Graph's `chatMessage` search requires both
 `Chat.Read` and `ChannelMessage.Read.All`, and without the second it refuses chat search too. Only a
@@ -58,16 +60,18 @@ Each command asks the broker only for the scopes it needs, so a missing admin-on
 commands that use it and nothing else. `auth status` asks for `User.Read` alone, so it still works,
 and still says what is missing, before an administrator has acted.
 
-| Command                                             | Asks for                               | Works without admin consent? |
-| --------------------------------------------------- | -------------------------------------- | ---------------------------- |
-| `auth status`                                       | `User.Read`                            | yes                          |
-| `chat list`, `chat messages`, `message view` (chat) | `Chat.Read`                            | yes                          |
-| `team list`                                         | `Team.ReadBasic.All`                   | yes                          |
-| `channel list`                                      | `Channel.ReadBasic.All`                | yes                          |
-| `message search`                                    | `Chat.Read`, `ChannelMessage.Read.All` | **no**                       |
-| `channel messages`, `message view` (channel)        | `ChannelMessage.Read.All`              | **no**                       |
-| `channel post`, `message reply`                     | `ChannelMessage.Send`                  | yes                          |
-| `chat send`                                         | `ChatMessage.Send`                     | yes                          |
+| Command                                             | Asks for                                                               | Works without admin consent? |
+| --------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------- |
+| `auth status`                                       | `User.Read`                                                            | yes                          |
+| `chat list`, `chat messages`, `message view` (chat) | `Chat.Read`                                                            | yes                          |
+| `team list`                                         | `Team.ReadBasic.All`                                                   | yes                          |
+| `channel list`                                      | `Channel.ReadBasic.All`                                                | yes                          |
+| `message search`                                    | `Chat.Read`, `ChannelMessage.Read.All`                                 | **no**                       |
+| `channel messages`, `message view` (channel)        | `ChannelMessage.Read.All`                                              | **no**                       |
+| `meeting list`                                      | `Chat.Read`                                                            | yes                          |
+| `meeting transcript`                                | `Chat.Read`, `OnlineMeetings.Read`, `OnlineMeetingTranscript.Read.All` | **no**                       |
+| `channel post`, `message reply`                     | `ChannelMessage.Send`                                                  | yes                          |
+| `chat send`                                         | `ChatMessage.Send`                                                     | yes                          |
 
 The two send scopes are not part of the read set. Only `auth login --allow-writes` asks for them,
 and `auth status` reports them on their own line ("Can post"). See [Write safety](write-safety.md),
@@ -88,7 +92,7 @@ simply teams auth login
 ```
 
 `auth login` asks for the read scopes at this one moment rather than in the middle of later work:
-the user-grantable ones interactively, and `ChannelMessage.Read.All` silently, so a missing admin
+the user-grantable ones interactively, and the two admin-only ones silently, so a missing admin
 consent is a line in the output instead of a dead end. `--allow-writes` adds the two send scopes. Usually nothing appears. When the broker needs you (first-time
 consent, a Conditional Access check), it shows its own account picker. On a joined machine that is
 one click, never a password.

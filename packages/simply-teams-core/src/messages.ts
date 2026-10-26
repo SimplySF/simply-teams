@@ -68,6 +68,11 @@ export interface GraphChat {
   readonly topic?: string | null;
   readonly chatType?: string;
   readonly webUrl?: string | null;
+  /** Set on a meeting chat: the meeting's join link and organizer (design 0008). */
+  readonly onlineMeetingInfo?: {
+    readonly joinWebUrl?: string | null;
+    readonly organizer?: { readonly user?: GraphIdentity | null } | null;
+  } | null;
   readonly lastMessagePreview?: {
     readonly createdDateTime?: string;
     readonly isDeleted?: boolean;

@@ -80,6 +80,13 @@ describe('parseRef: Teams links', () => {
     });
   });
 
+  it('reads a meeting join link as its meeting chat (design 0008)', () => {
+    const link =
+      'https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0?context=%7B%22Tid%22%3A%22t%22%7D';
+    expect(parseRef(link, ['chat'])).toStrictEqual({ kind: 'chat', chatId: '19:meeting_abc@thread.v2' });
+    expect(() => parseRef('https://teams.microsoft.com/l/meetup-join/nope/0', ['chat'])).toThrow(ConfigError);
+  });
+
   it('refuses a link from any other host', () => {
     expect(() => parseRef('https://teams.evil.example/l/chat/19%3Ax%40thread.v2/0', ALL)).toThrow(
       /not a Microsoft Teams host/,

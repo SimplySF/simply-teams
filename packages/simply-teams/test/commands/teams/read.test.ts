@@ -23,6 +23,8 @@ import ChatMessages from '../../../src/commands/teams/chat/messages.js';
 import MessageContextCommand from '../../../src/commands/teams/message/context.js';
 import MessageSearch from '../../../src/commands/teams/message/search.js';
 import MessageViewCommand from '../../../src/commands/teams/message/view.js';
+import MeetingList from '../../../src/commands/teams/meeting/list.js';
+import MeetingTranscriptCommand from '../../../src/commands/teams/meeting/transcript.js';
 
 const GRAPH = 'https://graph.microsoft.com';
 const CHAT = '19:chat@thread.v2';
@@ -248,5 +250,90 @@ describe('teams message context (design 0006)', () => {
     expect(output).toContain('release freeze starts Monday');
     expect(output).toContain('◀');
     expect(output).toContain('1 thread from 1 hits.');
+  });
+});
+
+describe('teams meeting (design 0008)', () => {
+  const MEETING_CHAT = '19:meeting_abc@thread.v2';
+  const JOIN = 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0?context=%7B%7D';
+  const meetingChat = {
+    id: MEETING_CHAT,
+    chatType: 'meeting',
+    topic: 'Release planning',
+    onlineMeetingInfo: { joinWebUrl: JOIN, organizer: { user: { id: 'u1', displayName: 'Ada' } } },
+    lastMessagePreview: { createdDateTime: '2026-10-20T10:00:00Z', body: { contentType: 'text', content: 'hi' } },
+  };
+  const VTT = [
+    'WEBVTT',
+    '',
+    '00:00:01.000 --> 00:00:02.000',
+    '<v Ada>We ship Friday.</v>',
+    '',
+    '00:00:05.000 --> 00:00:06.000',
+    '<v Bo>The deploy script is broken.</v>',
+    '',
+    '00:00:09.000 --> 00:00:10.000',
+    '<v Ada>Fix it first, then.</v>',
+    '',
+  ].join('\n');
+
+  function routeMeeting(): void {
+    nock(GRAPH)
+      .get(`/v1.0/chats/${encodeURIComponent(MEETING_CHAT)}`)
+      .query(true)
+      .reply(200, meetingChat)
+      .get('/v1.0/me/onlineMeetings')
+      .query(true)
+      .reply(200, {
+        value: [{ id: 'M1', subject: 'Release planning', startDateTime: '2026-10-20T09:00:00Z', joinWebUrl: JOIN }],
+      })
+      .get('/v1.0/me/onlineMeetings/M1/transcripts')
+      .reply(200, { value: [{ id: 'T1', createdDateTime: '2026-10-20T10:01:00Z' }] })
+      .get('/v1.0/me/onlineMeetings/M1/transcripts/T1/content')
+      .query(true)
+      .reply(200, VTT, { 'content-type': 'text/vtt' });
+  }
+
+  it('lists only meeting chats, with organizer and ref', async () => {
+    nock(GRAPH)
+      .get('/v1.0/me/chats')
+      .query(true)
+      .reply(200, { value: [{ id: CHAT, chatType: 'oneOnOne' }, meetingChat] });
+
+    const result = await MeetingList.run([]);
+
+    expect(result.items.map((item) => [item.ref, item.subject, item.organizer])).toStrictEqual([
+      [MEETING_CHAT, 'Release planning', 'Ada'],
+    ]);
+    expect(stdout.join('')).toContain('Release planning');
+    expect(stdout.join('')).not.toContain('oneOnOne');
+  });
+
+  it('prints the transcript as a conversation from a join link, and returns the shape under --json', async () => {
+    routeMeeting();
+
+    const result = await MeetingTranscriptCommand.run([JOIN]);
+
+    expect(result.meeting.id).toBe('M1');
+    expect(result.utterances.map((u) => u.speaker)).toStrictEqual(['Ada', 'Bo', 'Ada']);
+    const output = stdout.join('');
+    expect(output).toContain('━━ Release planning');
+    expect(output).toContain('[00:00:05] Bo: The deploy script is broken.');
+  });
+
+  it('narrows to --find with its context, marks the hits, and says where to continue when cut', async () => {
+    routeMeeting();
+
+    const result = await MeetingTranscriptCommand.run([MEETING_CHAT, '--find', 'deploy', '--context', '0']);
+
+    expect(result.matched).toBe(1);
+    expect(result.utterances.map((u) => u.at)).toStrictEqual(['00:00:05']);
+    expect(stdout.join('')).toContain('[00:00:05] Bo: The deploy script is broken.  ◀');
+
+    routeMeeting();
+    stdout = [];
+    const cut = await MeetingTranscriptCommand.run([MEETING_CHAT, '--max-chars', '20']);
+    expect(cut.truncated).toBe(true);
+    expect(stdout.join('')).toContain('continue with --start 00:00:05');
   });
 });

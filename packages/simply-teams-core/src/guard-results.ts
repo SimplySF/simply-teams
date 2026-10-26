@@ -60,6 +60,13 @@ const IDENTIFIERS = new Set([
   'userIdentityType',
   'hitIds',
   'mentionedUserIds',
+  // Meeting transcripts (0008): links, times and offsets an agent passes back.
+  'joinUrl',
+  'chatRef',
+  'startedAt',
+  'endedAt',
+  'lastActivity',
+  'nextStart',
 ]);
 
 function withheldNote(types: readonly string[]): string {

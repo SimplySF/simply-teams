@@ -116,7 +116,14 @@ describe('authStatus', () => {
       clientId: config.clientId,
       expiresOn: '2026-10-21T13:00:00.000Z',
       scopes: ['User.Read', 'Chat.ReadWrite', 'openid'],
-      missingScopes: ['User.ReadBasic.All', 'Team.ReadBasic.All', 'Channel.ReadBasic.All', 'ChannelMessage.Read.All'],
+      missingScopes: [
+        'User.ReadBasic.All',
+        'Team.ReadBasic.All',
+        'Channel.ReadBasic.All',
+        'OnlineMeetings.Read',
+        'ChannelMessage.Read.All',
+        'OnlineMeetingTranscript.Read.All',
+      ],
       missingWriteScopes: ['ChannelMessage.Send', 'ChatMessage.Send'],
     });
     expect(JSON.stringify(status)).not.toContain('secret-token');
@@ -133,7 +140,15 @@ describe('authStatus', () => {
 });
 
 describe('signIn', () => {
-  const ALL = ['User.Read', 'User.ReadBasic.All', 'Chat.Read', 'Team.ReadBasic.All', 'Channel.ReadBasic.All'];
+  const ALL = [
+    'User.Read',
+    'User.ReadBasic.All',
+    'Chat.Read',
+    'Team.ReadBasic.All',
+    'Channel.ReadBasic.All',
+    'OnlineMeetings.Read',
+  ];
+  const ADMIN = ['ChannelMessage.Read.All', 'OnlineMeetingTranscript.Read.All'];
 
   /** A provider whose token holds `granted`, and which refuses any request for a scope it lacks. */
   function consented(granted: readonly string[], tenantId = 'tid'): TokenProvider & { requests: TokenRequest[] } {
@@ -153,36 +168,33 @@ describe('signIn', () => {
     server.route('/v1.0/me', (_req, res) => respondJson(res, 200, { id: 'u1', userPrincipalName: 'ada@contoso.com' }));
   });
 
-  it('asks for the user scopes, then the admin scope silently, and links the admin-consent page when it is missing', async () => {
+  it('asks for the user scopes, then the admin scopes silently, and links the admin-consent page when they are missing', async () => {
     const tokens = consented(ALL);
 
     const result = await signIn(config, tokens, client(tokens));
 
-    expect(tokens.requests.slice(0, 2)).toStrictEqual([
-      { scopes: ALL },
-      { scopes: ['ChannelMessage.Read.All'], silentOnly: true },
-    ]);
-    expect(result.missingScopes).toStrictEqual(['ChannelMessage.Read.All']);
+    expect(tokens.requests.slice(0, 2)).toStrictEqual([{ scopes: ALL }, { scopes: ADMIN, silentOnly: true }]);
+    expect(result.missingScopes).toStrictEqual(ADMIN);
     expect(result.adminConsentUrl).toBe(
       `https://login.microsoftonline.com/tid/adminconsent?client_id=${config.clientId ?? ''}`,
     );
   });
 
   it('offers no link once everything is granted', async () => {
-    const tokens = consented([...ALL, 'ChannelMessage.Read.All']);
+    const tokens = consented([...ALL, ...ADMIN]);
     const result = await signIn(config, tokens, client(tokens));
     expect(result.missingScopes).toStrictEqual([]);
     expect(result.adminConsentUrl).toBeUndefined();
   });
 
   it('asks for the write scopes only when told to, and reports them apart from the read scopes', async () => {
-    const readOnly = consented([...ALL, 'ChannelMessage.Read.All']);
+    const readOnly = consented([...ALL, ...ADMIN]);
     const plain = await signIn(config, readOnly, client(readOnly));
     expect(readOnly.requests.some((request) => request.scopes?.includes('ChannelMessage.Send'))).toBe(false);
     expect(plain.missingScopes).toStrictEqual([]);
     expect(plain.missingWriteScopes).toStrictEqual(['ChannelMessage.Send', 'ChatMessage.Send']);
 
-    const writer = consented([...ALL, 'ChannelMessage.Read.All', 'ChannelMessage.Send', 'ChatMessage.Send']);
+    const writer = consented([...ALL, ...ADMIN, 'ChannelMessage.Send', 'ChatMessage.Send']);
     const withWrites = await signIn(config, writer, client(writer), { writes: true });
     expect(writer.requests[1]).toStrictEqual({ scopes: ['ChannelMessage.Send', 'ChatMessage.Send'] });
     expect(withWrites.missingWriteScopes).toStrictEqual([]);

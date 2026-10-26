@@ -83,6 +83,11 @@ the result's `scope` and `note` say so.
 **Message context** (design 0006): `gatherMessageContext` searches, groups hits into threads, reads
 each around its hits and returns them in relevance order within a character budget.
 
+**Meeting transcripts** (design 0008): `listMeetings` names the user's meeting chats; `readTranscript`
+resolves a meeting chat to its meeting, reads every transcript as WebVTT (`parseTranscript`,
+`mergeUtterances`) and returns utterances by speaker and time, narrowed by `find` and bounded by
+`maxChars`.
+
 **Cleaning** (design 0005): `secretsIn`, `TeamsGuard` (placeholders for personal data, kept stable and
 restorable), `cleanResult` (withholds items holding a secret, placeholders the rest, leaves
 identifiers alone, and reports what it did) and `restoreInput`; `DETECTOR_TYPES` for the corpus

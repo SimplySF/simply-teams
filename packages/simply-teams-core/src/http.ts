@@ -40,7 +40,15 @@ export interface JsonCall {
    * retried only when the failure proves Graph did not act (design 0004).
    */
   readonly mutating?: boolean;
+  /**
+   * The `Accept` header for {@link HttpTransport.text}, which reads a body that is not JSON: a
+   * meeting transcript as WebVTT (design 0008). Ignored by {@link HttpTransport.json}.
+   */
+  readonly accept?: string;
 }
+
+/** Turns a successful response body into the caller's value, or throws an `HttpError` for it. */
+type ReadBody<T> = (text: string, status: number) => T;
 
 /** Where and how a transport talks: fixed per client instance. */
 export interface TransportTarget {
@@ -141,7 +149,27 @@ export class HttpTransport {
    * and Graph messages have no idempotency key, so those fail at once and say so (design 0004).
    * A 401 is still answered with one refresh: Graph rejects the token before doing anything.
    */
-  public async json<T>(call: JsonCall): Promise<T> {
+  public json<T>(call: JsonCall): Promise<T> {
+    return this.execute<T>(call, 'application/json', (text, status) => {
+      if (text.trim() === '') return {} as T;
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new HttpError(`${call.method} ${call.path} returned malformed JSON.`, status, text);
+      }
+    });
+  }
+
+  /**
+   * Executes a call and returns the response body as text, untouched. The same token handling,
+   * retries and timeout as {@link json}; only the `Accept` header (`call.accept`, else
+   * `text/plain`) and the reading of the body differ (design 0008).
+   */
+  public text(call: JsonCall): Promise<string> {
+    return this.execute<string>(call, call.accept ?? 'text/plain', (text) => text);
+  }
+
+  private async execute<T>(call: JsonCall, accept: string, read: ReadBody<T>): Promise<T> {
     const url = this.resolve(call);
     let refreshed = false;
 
@@ -162,7 +190,7 @@ export class HttpTransport {
         continue;
       }
       try {
-        outcome = await this.attempt<T>(url, call, token);
+        outcome = await this.attempt<T>(url, call, token, accept, read);
       } catch (error) {
         const verdict = this.triage(error, call, url, attempt);
         if (verdict !== TRANSIENT) throw verdict;
@@ -184,14 +212,20 @@ export class HttpTransport {
   }
 
   /** Runs one attempt under a deadline that spans connection, headers, AND body. */
-  private async attempt<T>(url: URL, call: JsonCall, token: string): Promise<AttemptOutcome<T>> {
+  private async attempt<T>(
+    url: URL,
+    call: JsonCall,
+    token: string,
+    accept: string,
+    read: ReadBody<T>,
+  ): Promise<AttemptOutcome<T>> {
     const controller = new AbortController();
     const deadline = setTimeout(() => {
       controller.abort();
     }, this.timeoutMs);
 
     try {
-      const headers: Record<string, string> = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+      const headers: Record<string, string> = { Accept: accept, Authorization: `Bearer ${token}` };
       if (call.body !== undefined) headers['Content-Type'] = 'application/json';
 
       const response = await fetch(url, {
@@ -222,15 +256,7 @@ export class HttpTransport {
         throw new AuthError(`${call.method} ${call.path} was refused (403).${detail}`, 403);
       }
 
-      if (response.ok) {
-        const text = await response.text();
-        if (text.trim() === '') return { kind: 'done', value: {} as T };
-        try {
-          return { kind: 'done', value: JSON.parse(text) as T };
-        } catch {
-          throw new HttpError(`${call.method} ${call.path} returned malformed JSON.`, response.status, text);
-        }
-      }
+      if (response.ok) return { kind: 'done', value: read(await response.text(), response.status) };
 
       if (response.status === 429 || response.status >= 500) {
         const retryAfter = readRetryAfter(response.headers.get('retry-after'));
@@ -342,12 +368,19 @@ async function bodyAsJsonOrText(response: Response): Promise<unknown> {
   }
 }
 
-/** Graph wraps every failure as `{ error: { code, message } }`; those two fields are the useful part. */
+/**
+ * Graph wraps every failure as `{ error: { code, message, innerError? } }`; the code and message
+ * are the useful part, plus the inner code when there is one: a 403 is `Forbidden` whatever the
+ * reason, and the inner code is where Graph says which (design 0008).
+ */
 function graphError(body: unknown): string | undefined {
-  const error = (body as { error?: { code?: unknown; message?: unknown } } | undefined)?.error;
+  const error = (body as { error?: { code?: unknown; message?: unknown; innerError?: unknown } } | undefined)?.error;
   if (typeof error !== 'object' || error === null) return undefined;
   const parts = [error.code, error.message].filter((part): part is string => typeof part === 'string' && part !== '');
-  return parts.length === 0 ? undefined : parts.join(': ');
+  if (parts.length === 0) return undefined;
+  const inner = (error.innerError as { code?: unknown } | null | undefined)?.code;
+  const suffix = typeof inner === 'string' && inner !== '' && inner !== error.code ? ` [${inner}]` : '';
+  return `${parts.join(': ')}${suffix}`;
 }
 
 /**

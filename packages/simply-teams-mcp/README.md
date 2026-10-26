@@ -52,20 +52,22 @@ that client's configuration. See the MCP server guide for the details.
 
 ## Tools
 
-| Tool                     | What it does                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| `teams_auth_status`      | Who the server is signed in as, which cloud and tenant, and which scopes are missing |
-| `teams_message_search`   | Search messages; hits carry a `ref` to fetch the full message                        |
-| `teams_message_view`     | One message, optionally with the messages around it                                  |
-| `teams_message_context`  | Search, then read the matching threads in one call, within a character budget        |
-| `teams_chat_list`        | Your chats, most recent first                                                        |
-| `teams_chat_messages`    | A chat's recent messages                                                             |
-| `teams_team_list`        | The teams you belong to                                                              |
-| `teams_channel_list`     | A team's channels                                                                    |
-| `teams_channel_messages` | A channel's posts, optionally with replies                                           |
-| `teams_channel_post`     | **Write.** Start a thread in a channel, as you                                       |
-| `teams_message_reply`    | **Write.** Reply in a channel thread, as you                                         |
-| `teams_chat_send`        | **Write.** Send in a chat, as you                                                    |
+| Tool                       | What it does                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `teams_auth_status`        | Who the server is signed in as, which cloud and tenant, and which scopes are missing |
+| `teams_message_search`     | Search messages; hits carry a `ref` to fetch the full message                        |
+| `teams_message_view`       | One message, optionally with the messages around it                                  |
+| `teams_message_context`    | Search, then read the matching threads in one call, within a character budget        |
+| `teams_chat_list`          | Your chats, most recent first                                                        |
+| `teams_chat_messages`      | A chat's recent messages                                                             |
+| `teams_team_list`          | The teams you belong to                                                              |
+| `teams_channel_list`       | A team's channels                                                                    |
+| `teams_channel_messages`   | A channel's posts, optionally with replies                                           |
+| `teams_meeting_list`       | The meetings you were in                                                             |
+| `teams_meeting_transcript` | What was said in a meeting, by speaker and time; `find` narrows it                   |
+| `teams_channel_post`       | **Write.** Start a thread in a channel, as you                                       |
+| `teams_message_reply`      | **Write.** Reply in a channel thread, as you                                         |
+| `teams_chat_send`          | **Write.** Send in a chat, as you                                                    |
 
 `teams auth login` deliberately has no tool, because signing in is something a person does at a
 terminal.

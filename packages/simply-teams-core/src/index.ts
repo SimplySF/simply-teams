@@ -99,6 +99,30 @@ export {
 
 export { searchMessages, type SearchOptions } from './search.js';
 
+// --- Meeting transcripts (design 0008) ---
+export {
+  DEFAULT_FIND_CONTEXT,
+  DEFAULT_MEETINGS,
+  listMeetings,
+  MAX_FIND_CONTEXT,
+  MAX_MEETINGS,
+  readTranscript,
+  resolveMeeting,
+  type MeetingInfo,
+  type MeetingTranscript,
+  type TeamsMeeting,
+  type TranscriptOptions,
+} from './meetings.js';
+export {
+  formatOffset,
+  mergeUtterances,
+  parseOffset,
+  parseTimestamp,
+  parseTranscript,
+  type Cue,
+  type Utterance,
+} from './vtt.js';
+
 // --- Cleaning what an agent sees (design 0005) ---
 export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
 export { cleanResult, rehideDeep, restoreInput, type GuardReport } from './guard-results.js';

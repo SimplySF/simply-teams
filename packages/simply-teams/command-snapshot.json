@@ -76,6 +76,22 @@
   },
   {
     "alias": [],
+    "command": "teams:meeting:list",
+    "flagAliases": [],
+    "flagChars": ["e"],
+    "flags": ["clean", "client-id", "cloud", "env-file", "json", "limit", "tenant"],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
+    "command": "teams:meeting:transcript",
+    "flagAliases": [],
+    "flagChars": ["c", "e"],
+    "flags": ["clean", "client-id", "cloud", "context", "env-file", "find", "json", "max-chars", "start", "tenant"],
+    "plugin": "@simplysf/simply-teams"
+  },
+  {
+    "alias": [],
     "command": "teams:message:context",
     "flagAliases": [],
     "flagChars": ["e"],
