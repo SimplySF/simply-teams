@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 
-import { Args, Flags } from '@oclif/core';
-import { parseDate, searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
+import { Args } from '@oclif/core';
+import { searchMessages, type SearchResult } from '@simplysf/simply-teams-core';
 import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderHit } from '../../../shared/message-output.js';
+import {
+  fallbackFlags,
+  searchFilterFlags,
+  searchFiltersFrom,
+  searchOptionsFrom,
+} from '../../../shared/search-flags.js';
 
 export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
   public static override readonly summary = 'Search the chat and channel messages you can see.';
@@ -27,8 +33,8 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
     'the flags add the documented filters. Results come in relevance order; Graph cannot sort them.\n\n' +
     'Each result is a snippet, not the whole message. Pass its ref to "teams message view" for the ' +
     'full text and, with --context, the conversation around it.\n\n' +
-    'Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Graph refuses ' +
-    'message search entirely without it, even for chats.';
+    'Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Until it is ' +
+    'granted, your recent chats are read instead and the output says so; --chats-only asks for that outright.';
 
   public static override readonly examples = [
     {
@@ -51,10 +57,8 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
 
   public static override readonly flags = {
     ...cleanFlag,
-    from: Flags.string({ summary: 'Only messages from this person: a name or email address.' }),
-    since: Flags.string({ summary: 'Only messages sent on or after this date: YYYY-MM-DD, or relative like 7d.' }),
-    until: Flags.string({ summary: 'Only messages sent on or before this date.' }),
-    'mentions-me': Flags.boolean({ summary: 'Only messages that @mention you.', default: false }),
+    ...searchFilterFlags,
+    ...fallbackFlags,
     ...limitFlag(25, 'results'),
   };
 
@@ -64,15 +68,12 @@ export default class MessageSearch extends TeamsCommand<typeof MessageSearch> {
       await searchMessages(
         this.graph(),
         this.args.query ?? '',
-        {
-          from: flags.from,
-          since: flags.since === undefined ? undefined : parseDate(flags.since),
-          until: flags.until === undefined ? undefined : parseDate(flags.until),
-          mentionsMe: flags['mentions-me'],
-        },
+        searchFiltersFrom(flags),
         flags.limit,
+        searchOptionsFrom(flags),
       ),
     );
+    if (result.note !== undefined) this.logSafe(`${result.note}\n`);
     if (result.items.length === 0) this.log(`No messages match: ${result.query}`);
     else this.logSafe(result.items.map(renderHit).join('\n\n'));
     this.reportList(result.items.length, result.complete, flags.limit, 'results');

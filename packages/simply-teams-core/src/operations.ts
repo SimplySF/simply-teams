@@ -67,6 +67,10 @@ const encode = encodeURIComponent;
 export interface SearchResult extends ListResult<TeamsSearchHit> {
   /** The KQL actually sent, so a caller can see how its flags were read. */
   readonly query: string;
+  /** `all` when Graph searched chats and channels; `chats` when only the user's chats were read (0007). */
+  readonly scope: 'all' | 'chats';
+  /** For a chat scan: what was and was not searched, in one sentence. */
+  readonly note?: string;
 }
 
 interface SearchResponse {
@@ -81,9 +85,10 @@ interface SearchResponse {
 /**
  * Searches the messages the signed-in user can see. Graph cannot sort message hits and its
  * `total` counts only the current page (both documented), so neither is offered: results come in
- * Graph's relevance order, and completeness is reported from `moreResultsAvailable`.
+ * Graph's relevance order, and completeness is reported from `moreResultsAvailable`. The fallback
+ * to the user's chats when the tenant has not consented lives in `search.ts` (design 0007).
  */
-export async function searchMessages(
+export async function searchGraph(
   graph: GraphClient,
   text: string,
   filters: SearchFilters,
@@ -112,7 +117,7 @@ export async function searchMessages(
   }
   /* eslint-enable no-await-in-loop */
 
-  return { query, items: items.slice(0, limit), pages, complete: !more && items.length <= limit };
+  return { query, items: items.slice(0, limit), pages, complete: !more && items.length <= limit, scope: 'all' };
 }
 
 // --- One message, with its surroundings ---
@@ -229,8 +234,17 @@ export async function viewMessage(
     ref.rootId === undefined
       ? `${base}/${encode(ref.messageId)}`
       : `${base}/${encode(ref.rootId)}/replies/${encode(ref.messageId)}`;
+  if (context === 0) {
+    const raw = await graph.get<GraphChatMessage>(path, SCOPES.channelMessages);
+    return { message: normalizeMessage(raw), thread: [], warnings: [] };
+  }
+  // The thread holds the message in all but one case, so it is read first and the message taken
+  // from it; one request fewer per view, which matters when context reads many threads (0006).
+  const around = await channelContext(graph, ref, context);
+  const found = around.thread.find((message) => message.id === ref.messageId);
+  if (found !== undefined) return { message: found, ...around };
+  // A reply beyond the pages that were read: fetched on its own.
   const raw = await graph.get<GraphChatMessage>(path, SCOPES.channelMessages);
-  const around = context === 0 ? { thread: [], warnings: [] } : await channelContext(graph, ref, context);
   return { message: normalizeMessage(raw), ...around };
 }
 

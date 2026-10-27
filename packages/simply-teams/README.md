@@ -110,6 +110,7 @@ identical with and without `--json`.
 - [`simply teams chat list`](#simply-teams-chat-list)
 - [`simply teams chat messages CHAT`](#simply-teams-chat-messages-chat)
 - [`simply teams chat send CHAT`](#simply-teams-chat-send-chat)
+- [`simply teams message context [QUERY]`](#simply-teams-message-context-query)
 - [`simply teams message reply MESSAGE`](#simply-teams-message-reply-message)
 - [`simply teams message search [QUERY]`](#simply-teams-message-search-query)
 - [`simply teams message view REF`](#simply-teams-message-view-ref)
@@ -519,6 +520,73 @@ FLAG DESCRIPTIONS
 
 _See code: [lib/commands/teams/chat/send.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/chat/send.js)_
 
+## `simply teams message context [QUERY]`
+
+Find the conversations behind a question: search, then read the matching threads.
+
+```
+USAGE
+  $ simply teams message context [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--chats-only]
+    [--chats <value>] [--threads <value>] [--context <value>] [--max-chars <value>]
+
+ARGUMENTS
+  [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
+
+FLAGS
+  --chats=<value>      [default: 20] How many recent chats a chat scan reads.
+  --chats-only         Read your recent chats instead of searching; what happens anyway when ChannelMessage.Read.All is
+                       not granted.
+  --clean              Withhold messages that hold a secret and replace personal data with placeholders, as the MCP
+                       server does.
+  --context=<value>    [default: 10] Messages to read around each hit.
+  --from=<value>       Only messages from this person: a name or email address.
+  --max-chars=<value>  [default: 24000] A ceiling on the message text returned; long threads are trimmed around their
+                       hits.
+  --mentions-me        Only messages that @mention you.
+  --since=<value>      Only messages sent on or after this date: YYYY-MM-DD, or relative like 7d.
+  --threads=<value>    [default: 5] How many threads to read, in relevance order.
+  --until=<value>      Only messages sent on or before this date.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Find the conversations behind a question: search, then read the matching threads.
+
+  Searches like "teams message search", groups the hits into threads, and reads each thread around its hits: a channel
+  post with its replies, or the messages either side in a chat. Threads come in relevance order, oldest message first
+  within each, within a character budget, so one call answers "where was this discussed?" with the text itself.
+
+  Needs ChannelMessage.Read.All, which only a tenant administrator can consent to; Graph refuses message search entirely
+  without it.
+
+EXAMPLES
+  The threads where a change was discussed
+
+    $ simply teams message context "release freeze"
+
+  More threads, less of each, from the last two weeks
+
+    $ simply teams message context deploy --since 2w --threads 10 --context 3
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/message/context.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/message/context.js)_
+
 ## `simply teams message reply MESSAGE`
 
 Reply in a channel message's thread, as you.
@@ -578,13 +646,16 @@ Search the chat and channel messages you can see.
 ```
 USAGE
   $ simply teams message search [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit
-    <value>]
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--chats-only]
+    [--chats <value>] [--limit <value>]
 
 ARGUMENTS
   [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
 
 FLAGS
+  --chats=<value>  [default: 20] How many recent chats a chat scan reads.
+  --chats-only     Read your recent chats instead of searching; what happens anyway when ChannelMessage.Read.All is not
+                   granted.
   --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
                    does.
   --from=<value>   Only messages from this person: a name or email address.
@@ -614,8 +685,8 @@ DESCRIPTION
   Each result is a snippet, not the whole message. Pass its ref to "teams message view" for the full text and, with
   --context, the conversation around it.
 
-  Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Graph refuses message search entirely
-  without it, even for chats.
+  Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Until it is granted, your recent
+  chats are read instead and the output says so; --chats-only asks for that outright.
 
 EXAMPLES
   Find where something was discussed

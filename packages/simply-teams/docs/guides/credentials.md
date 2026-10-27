@@ -73,7 +73,9 @@ The two send scopes are not part of the read set. Only `auth login --allow-write
 and `auth status` reports them on their own line ("Can post"). See [Write safety](write-safety.md),
 which also explains why writing deserves an app registration of its own.
 
-Until an administrator consents, `chat messages --since 7d` is the way to read a known chat.
+Until an administrator consents, `message search` and `message context` read your most recent chats on
+the client instead (`Chat.Read` only) and say so in their output; `--chats-only` asks for that outright.
+Channels join the search the moment consent is granted, with no change to how the commands are called.
 
 The app registration must be consented for these exact scope names. The broker will not substitute
 a broader grant: an app consented for `Chat.ReadWrite` but not `Chat.Read` still fails a `Chat.Read`

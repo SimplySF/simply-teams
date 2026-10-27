@@ -76,6 +76,13 @@ missing read and write scopes, never the token; the reads (`searchMessages`, `vi
 `sendPlanned` posts it and returns the stored message. `buildMessageBody` escapes text and links
 mentions.
 
+**Search before consent** (design 0007): `searchMessages` falls back to `searchChats`, a client-side
+scan of the user's recent chats, when Graph refuses the search for want of `ChannelMessage.Read.All`;
+the result's `scope` and `note` say so.
+
+**Message context** (design 0006): `gatherMessageContext` searches, groups hits into threads, reads
+each around its hits and returns them in relevance order within a character budget.
+
 **Cleaning** (design 0005): `secretsIn`, `TeamsGuard` (placeholders for personal data, kept stable and
 restorable), `cleanResult` (withholds items holding a secret, placeholders the rest, leaves
 identifiers alone, and reports what it did) and `restoreInput`; `DETECTOR_TYPES` for the corpus
