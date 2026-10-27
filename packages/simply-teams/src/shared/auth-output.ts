@@ -28,6 +28,10 @@ export function renderAuthStatus(status: AuthStatus): string {
       ['Client ID', status.clientId],
       ['Token expires', status.expiresOn],
       ['Missing scopes', status.missingScopes.length === 0 ? 'none' : status.missingScopes.join(', ')],
+      [
+        'Can post',
+        status.missingWriteScopes.length === 0 ? 'yes' : `no (missing ${status.missingWriteScopes.join(', ')})`,
+      ],
     ]),
   ];
   if (status.missingScopes.includes('ChannelMessage.Read.All')) {

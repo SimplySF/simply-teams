@@ -46,17 +46,19 @@ and cloud), `CLOUDS` (login and Graph hosts for `global`, `usgov-high`, and `dod
 variable names, and `loadEnvFile`/`parseEnvFile` for an allowlisted `.env` file.
 
 **Tokens**: the `TokenProvider` interface; `staticTokenProvider` and `describeStaticToken` for a
-supplied token (an expired one is refused up front); `READ_SCOPES`, `BASE_SCOPES`, `graphScopes`,
+supplied token (an expired one is refused up front); `READ_SCOPES`, `WRITE_SCOPES`, `BASE_SCOPES`, `graphScopes`,
 `shortScope`, and `missingScopes`, which allows for broader grants but deliberately accepts nothing
 in place of `ChannelMessage.Read.All`.
 
 **Transport**: `HttpTransport`. It fetches a token per request and answers a 401 with exactly one
-forced refresh. It retries 429 and 5xx with a capped `Retry-After` and applies a 30 s deadline that
+forced refresh. It retries 429 and 5xx with a capped `Retry-After`, except that a call marked
+`mutating` is retried only on a 429 or a refused connection, so a message is never posted twice. It
+applies a 30 s deadline that
 covers the response body. It refuses to send the token to any origin but the configured Graph host,
 and it never follows a redirect.
 
-**The client**: `GraphClient`, with `me()` and `list()`; every list returns
-`{ items, pages, complete }`.
+**The client**: `GraphClient`, with `me()`, `get()`, `post()` (a POST that reads), `send()` (a POST
+that writes, sent once), `pages()` and `list()`; every list returns `{ items, pages, complete }`.
 
 **Errors**: `ConfigError` (exit 2), `AuthError` (3), `NetworkError` (1), and `HttpError` (1), all
 extending `CliError`. Graph's `{ error: { code, message } }` is surfaced as the message.
@@ -67,8 +69,17 @@ extending `CliError`. Graph's `{ error: { code, message } }` is surfaced as the 
 - `redactSecrets` and `sanitiseDeep` keep a supplied token out of any message or response body.
 - `stripControl` and `stripControlOneLine` clean text that other people wrote.
 
-**Operations**: `authStatus`, which signs in, confirms the account with Graph, and reports the
-missing scopes. It never includes the token.
+**Operations**: `authStatus` and `signIn`, which confirm the account with Graph and report the
+missing read and write scopes, never the token; the reads (`searchMessages`, `viewMessage`,
+`listChats`, `listChatMessages`, `listTeams`, `listChannels`, `listChannelMessages`); and the writes
+(design 0004): `planChannelPost`, `planChannelReply` and `planChatSend` build the exact request, and
+`sendPlanned` posts it and returns the stored message. `buildMessageBody` escapes text and links
+mentions.
+
+**Cleaning** (design 0005): `secretsIn`, `TeamsGuard` (placeholders for personal data, kept stable and
+restorable), `cleanResult` (withholds items holding a secret, placeholders the rest, leaves
+identifiers alone, and reports what it did) and `restoreInput`; `DETECTOR_TYPES` for the corpus
+test.
 
 **Rendering**: `formatTable`, `formatKeyValue`.
 

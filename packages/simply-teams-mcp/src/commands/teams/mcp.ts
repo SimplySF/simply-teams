@@ -68,6 +68,11 @@ export default class TeamsMcp extends Command {
         'TEAMS_READ_ONLY in the environment still refuses every write even when this is on.',
       default: false,
     }),
+    clean: Flags.boolean({
+      summary: 'Clean what the agent sees: withhold messages holding secrets, replace personal data. On by default.',
+      default: true,
+      allowNo: true,
+    }),
     'env-file': Flags.string({
       char: 'e',
       summary: 'Path to a .env file holding connection settings.',
@@ -101,6 +106,6 @@ export default class TeamsMcp extends Command {
 
     // Resolves once the transport is connected; the process then stays alive until the client
     // closes the stream, which is why this command never returns in normal use.
-    await startServer({ allowWrites: flags['allow-writes'], envFile: flags['env-file'] });
+    await startServer({ allowWrites: flags['allow-writes'], clean: flags.clean, envFile: flags['env-file'] });
   }
 }

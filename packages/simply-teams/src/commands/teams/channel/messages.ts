@@ -22,7 +22,7 @@ import {
   parseRef,
   type TeamsMessage,
 } from '@simplysf/simply-teams-core';
-import { limitFlag, TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderTranscript } from '../../../shared/message-output.js';
 
 export default class ChannelMessages extends TeamsCommand<typeof ChannelMessages> {
@@ -45,6 +45,7 @@ export default class ChannelMessages extends TeamsCommand<typeof ChannelMessages
   };
 
   public static override readonly flags = {
+    ...cleanFlag,
     since: Flags.string({ summary: 'Only posts created on or after this date: YYYY-MM-DD, or relative like 7d.' }),
     replies: Flags.boolean({ summary: "Also fetch each post's replies.", default: false }),
     'include-events': Flags.boolean({ summary: 'Also show system events.', default: false }),
@@ -54,12 +55,14 @@ export default class ChannelMessages extends TeamsCommand<typeof ChannelMessages
   public async run(): Promise<ListResult<TeamsMessage>> {
     const { flags } = this;
     const ref = parseRef(this.args.channel, ['channel']);
-    const result = await listChannelMessages(this.graph(), ref, {
-      since: flags.since === undefined ? undefined : parseDate(flags.since),
-      limit: flags.limit,
-      replies: flags.replies,
-      includeEvents: flags['include-events'],
-    });
+    const result = this.cleaned(
+      await listChannelMessages(this.graph(), ref, {
+        since: flags.since === undefined ? undefined : parseDate(flags.since),
+        limit: flags.limit,
+        replies: flags.replies,
+        includeEvents: flags['include-events'],
+      }),
+    );
     this.logSafe(result.items.length === 0 ? 'No posts.' : renderTranscript(result.items));
     this.reportList(
       result.items.filter((message) => message.replyToId === undefined).length,

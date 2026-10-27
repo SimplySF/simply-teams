@@ -25,6 +25,7 @@ import {
   type TokenProvider,
   type TokenSource,
   USER_CONSENT_SCOPES,
+  WRITE_SCOPES,
 } from './token.js';
 
 /**
@@ -42,6 +43,11 @@ export interface AuthStatus {
   readonly scopes: readonly string[];
   /** Read scopes the token lacks. Search needs `Chat.Read` and `ChannelMessage.Read.All` both. */
   readonly missingScopes: readonly string[];
+  /**
+   * Write scopes the token lacks (design 0004). Reported apart from `missingScopes` because writes
+   * are opt-in: a read-only sign-in is the normal, healthy state, not a gap.
+   */
+  readonly missingWriteScopes: readonly string[];
 }
 
 /**
@@ -67,6 +73,7 @@ export async function authStatus(config: TeamsConfig, tokens: TokenProvider, gra
     expiresOn: token.expiresOn?.toISOString(),
     scopes,
     missingScopes: missingScopes(scopes),
+    missingWriteScopes: missingScopes(scopes, WRITE_SCOPES),
   };
 }
 
@@ -84,13 +91,26 @@ export function adminConsentUrl(config: TeamsConfig, tenantId: string | undefine
   return `${config.endpoints.loginUrl}/${encodeURIComponent(tenantId)}/adminconsent?client_id=${encodeURIComponent(config.clientId)}`;
 }
 
+/** What `auth login` was asked to cover beyond the read scopes. */
+export interface SignInOptions {
+  /** Also ask for the write scopes (design 0004). Both are user-consentable, so this may prompt. */
+  readonly writes?: boolean;
+}
+
 /**
  * Signs in in two steps (design 0003): interactively for the scopes a user can grant, then
  * silently for the admin-only ones. A missing admin consent is reported, not fatal, so the
- * commands that never needed an administrator work from the first login.
+ * commands that never needed an administrator work from the first login. With `writes`, the
+ * write scopes are asked for too, interactively, since a user can grant them (design 0004).
  */
-export async function signIn(config: TeamsConfig, tokens: TokenProvider, graph: GraphClient): Promise<SignInResult> {
+export async function signIn(
+  config: TeamsConfig,
+  tokens: TokenProvider,
+  graph: GraphClient,
+  options: SignInOptions = {},
+): Promise<SignInResult> {
   await tokens.getToken({ scopes: USER_CONSENT_SCOPES });
+  if (options.writes === true) await tokens.getToken({ scopes: WRITE_SCOPES });
   try {
     await tokens.getToken({ scopes: ADMIN_CONSENT_SCOPES, silentOnly: true });
   } catch (error) {

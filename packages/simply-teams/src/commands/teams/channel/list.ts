@@ -16,7 +16,7 @@
 
 import { Args } from '@oclif/core';
 import { formatTable, type ListResult, listChannels, parseRef, type TeamsChannel } from '@simplysf/simply-teams-core';
-import { TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, TeamsCommand } from '../../../shared/base-command.js';
 
 export default class ChannelList extends TeamsCommand<typeof ChannelList> {
   public static override readonly summary = 'List the channels in a team.';
@@ -30,9 +30,11 @@ export default class ChannelList extends TeamsCommand<typeof ChannelList> {
     team: Args.string({ description: 'A team name, ref, or link.', required: true }),
   };
 
+  public static override readonly flags = { ...cleanFlag };
+
   public async run(): Promise<ListResult<TeamsChannel>> {
     const ref = parseRef(this.args.team, ['team']);
-    const result = await listChannels(this.graph(), ref.team);
+    const result = this.cleaned(await listChannels(this.graph(), ref.team));
     this.logSafe(
       formatTable(result.items, [
         { header: 'Channel', value: (channel): unknown => channel.name },

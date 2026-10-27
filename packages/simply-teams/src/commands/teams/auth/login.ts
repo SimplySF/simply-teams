@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { Flags } from '@oclif/core';
 import { signIn, type SignInResult } from '@simplysf/simply-teams-core';
 import { renderAuthStatus } from '../../../shared/auth-output.js';
 import { TeamsCommand } from '../../../shared/base-command.js';
@@ -31,15 +32,30 @@ export default class AuthLogin extends TeamsCommand<typeof AuthLogin> {
     'MCP server sign in silently. Run this again only when one of them says to.\n\n' +
     'ChannelMessage.Read.All, which message search and the channel commands need, can only be ' +
     'granted by a tenant administrator. Login does not wait for it: the chat, team, and channel ' +
-    'list commands work straight away, and login prints the link an administrator can use to grant it.';
+    'list commands work straight away, and login prints the link an administrator can use to grant it.\n\n' +
+    'Posting is opt-in. --allow-writes also asks for ChannelMessage.Send and ChatMessage.Send, which ' +
+    'any user can grant. Consider a separate app registration for writing, so the one an agent uses ' +
+    'every day can only read: the broker hands out every scope ever granted to an app.';
 
-  public static override readonly examples = ['<%= config.bin %> <%= command.id %>'];
+  public static override readonly examples = [
+    '<%= config.bin %> <%= command.id %>',
+    { description: 'Also allow posting and replying', command: '<%= config.bin %> <%= command.id %> --allow-writes' },
+  ];
+
+  public static override readonly flags = {
+    'allow-writes': Flags.boolean({
+      summary: 'Also ask for the scopes posting needs (ChannelMessage.Send, ChatMessage.Send).',
+      default: false,
+    }),
+  };
 
   public async run(): Promise<SignInResult> {
     const config = this.teamsConfig();
     // User-grantable scopes interactively, the admin-only one silently (design 0003), so a missing
     // admin consent is a line in the output rather than a sign-in that cannot complete.
-    const result = await signIn(config, this.tokens(config), this.graph(config));
+    const result = await signIn(config, this.tokens(config), this.graph(config), {
+      writes: this.flags['allow-writes'],
+    });
     const consent =
       result.adminConsentUrl === undefined
         ? ''

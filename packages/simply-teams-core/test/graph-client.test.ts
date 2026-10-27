@@ -117,6 +117,7 @@ describe('authStatus', () => {
       expiresOn: '2026-10-21T13:00:00.000Z',
       scopes: ['User.Read', 'Chat.ReadWrite', 'openid'],
       missingScopes: ['User.ReadBasic.All', 'Team.ReadBasic.All', 'Channel.ReadBasic.All', 'ChannelMessage.Read.All'],
+      missingWriteScopes: ['ChannelMessage.Send', 'ChatMessage.Send'],
     });
     expect(JSON.stringify(status)).not.toContain('secret-token');
   });
@@ -172,6 +173,19 @@ describe('signIn', () => {
     const result = await signIn(config, tokens, client(tokens));
     expect(result.missingScopes).toStrictEqual([]);
     expect(result.adminConsentUrl).toBeUndefined();
+  });
+
+  it('asks for the write scopes only when told to, and reports them apart from the read scopes', async () => {
+    const readOnly = consented([...ALL, 'ChannelMessage.Read.All']);
+    const plain = await signIn(config, readOnly, client(readOnly));
+    expect(readOnly.requests.some((request) => request.scopes?.includes('ChannelMessage.Send'))).toBe(false);
+    expect(plain.missingScopes).toStrictEqual([]);
+    expect(plain.missingWriteScopes).toStrictEqual(['ChannelMessage.Send', 'ChatMessage.Send']);
+
+    const writer = consented([...ALL, 'ChannelMessage.Read.All', 'ChannelMessage.Send', 'ChatMessage.Send']);
+    const withWrites = await signIn(config, writer, client(writer), { writes: true });
+    expect(writer.requests[1]).toStrictEqual({ scopes: ['ChannelMessage.Send', 'ChatMessage.Send'] });
+    expect(withWrites.missingWriteScopes).toStrictEqual([]);
   });
 
   it('still fails when the user scopes themselves cannot be granted', async () => {

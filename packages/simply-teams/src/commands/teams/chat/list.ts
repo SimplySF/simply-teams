@@ -15,7 +15,7 @@
  */
 
 import { formatTable, type ListResult, listChats, type TeamsChat } from '@simplysf/simply-teams-core';
-import { limitFlag, TeamsCommand } from '../../../shared/base-command.js';
+import { cleanFlag, limitFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { truncate, when } from '../../../shared/message-output.js';
 
 export default class ChatList extends TeamsCommand<typeof ChatList> {
@@ -27,11 +27,12 @@ export default class ChatList extends TeamsCommand<typeof ChatList> {
   public static override readonly examples = ['<%= config.bin %> <%= command.id %> --limit 10'];
 
   public static override readonly flags = {
+    ...cleanFlag,
     ...limitFlag(20, 'chats'),
   };
 
   public async run(): Promise<ListResult<TeamsChat>> {
-    const result = await listChats(this.graph(), this.flags.limit);
+    const result = this.cleaned(await listChats(this.graph(), this.flags.limit));
     this.logSafe(
       formatTable(result.items, [
         { header: 'Last active', value: (chat): unknown => when(chat.lastMessage?.at) },

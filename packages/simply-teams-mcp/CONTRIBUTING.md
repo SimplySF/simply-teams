@@ -34,7 +34,7 @@ A new tool needs:
   breaks every agent that learned it.
 - A `command` naming the CLI command it mirrors.
 - A `kind`: `read` or `write`. Write tools are registered only with `--allow-writes` and go through
-  `assertWritesAllowed` before running. None exist yet; the first one needs its own design doc.
+  `assertWritesAllowed` before running. The current ones are design 0004's; a new kind of write needs its own design doc.
 - An `inputSchema`. Write tools include `dryRun`; a test asserts it.
 - A `run` that calls into `@simplysf/simply-teams-core` — the same functions the command calls — and
   returns what the command returns under `--json`.

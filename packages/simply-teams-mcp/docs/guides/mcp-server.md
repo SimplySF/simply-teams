@@ -90,8 +90,8 @@ Running it without `--client` lists them, and marks the ones found on this machi
   checked to exist, and passed to the server. Without it, the entry starts with no settings, because
   a GUI client doesn't see your shell's environment.
 - **Server flags are passed through.** `--allow-writes` reaches the server and names the entry
-  `simply-teams-write`. There are no write tools yet, so it has no effect today. `--name` overrides
-  the name.
+  `simply-teams-write`, so a read-only entry and a writing one can sit side by side. `--name`
+  overrides the name.
 - **`--scope project` writes the repository's own file** in the current directory instead:
   `.mcp.json` for Claude Code, `.cursor/mcp.json`, `.vscode/mcp.json`, or `.gemini/settings.json`.
   The entry then runs `simply` from `PATH`, so it works for everyone who clones the repository.
@@ -185,17 +185,53 @@ will not work until a tenant administrator consents to it for the app registrati
 
 ## Tools
 
-| Tool                | Read or write | Equivalent command  | What it returns                                                                           |
-| ------------------- | ------------- | ------------------- | ----------------------------------------------------------------------------------------- |
-| `teams_auth_status` | read          | `teams auth status` | Account, display name, tenant, cloud, token source and expiry, granted and missing scopes |
+| Tool                     | Read or write | Equivalent command       | What it returns                                                                |
+| ------------------------ | ------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `teams_auth_status`      | read          | `teams auth status`      | Account, tenant, cloud, token source and expiry, missing read and write scopes |
+| `teams_message_search`   | read          | `teams message search`   | Hits with a highlighted summary and a `ref`                                    |
+| `teams_message_view`     | read          | `teams message view`     | One message, with context around it when asked                                 |
+| `teams_chat_list`        | read          | `teams chat list`        | Chats with their last message preview                                          |
+| `teams_chat_messages`    | read          | `teams chat messages`    | A chat's messages, oldest first                                                |
+| `teams_team_list`        | read          | `teams team list`        | Joined teams                                                                   |
+| `teams_channel_list`     | read          | `teams channel list`     | A team's channels                                                              |
+| `teams_channel_messages` | read          | `teams channel messages` | A channel's posts, with replies when asked                                     |
+| `teams_channel_post`     | write         | `teams channel post`     | The posted message, or the request under `dryRun`                              |
+| `teams_message_reply`    | write         | `teams message reply`    | The posted reply, or the request under `dryRun`                                |
+| `teams_chat_send`        | write         | `teams chat send`        | The sent message, or the request under `dryRun`                                |
 
 `teams auth login` deliberately has no tool, because signing in is something a person does at a
-terminal. Message search and the tools for reading chats, channels, and threads are designed next,
-in the repository's design documents.
+terminal.
 
-Only read tools exist. `--allow-writes` is accepted so that existing configurations keep working
-when write tools arrive. Today it changes only the label in `--list`. `TEAMS_READ_ONLY=1` is already
-honoured.
+The write tools are registered only with `--allow-writes`, and `TEAMS_READ_ONLY=1` refuses them even
+then. They post as the signed-in person, and a write that fails with "may have been posted" was not
+retried: check before calling it again. The
+[write-safety guide](../../../simply-teams/docs/guides/write-safety.md) explains the layers, and why
+the server an agent uses every day should run on an app registration that can only read.
+
+## What the agent sees
+
+Results are cleaned before they are returned, so a credential or a phone number pasted into a chat
+does not travel into the agent's context, and from there to its model provider:
+
+| In a message                                                 | The agent sees                                                                                       |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| a secret: a key, a token, a private key, a password in a URL | `[withheld: contains a secret (AWS access key)]` in place of the whole text; the ref and author stay |
+| an email address, phone number, SSN, card number or IBAN     | a placeholder, `[EMAIL-1]`, the same one for the same value every time                               |
+| anything else                                                | the text as written                                                                                  |
+
+Placeholders work in the other direction too. A reply of "thanks [EMAIL-1]" reaches Teams with the
+real address, because the server restores every placeholder it issued before the request goes out,
+and the dry run the agent is shown is cleaned again. Each result ends with a `cleaned` summary:
+
+```json
+"cleaned": { "withheld": 1, "redacted": { "email address": 2 }, "summary": "Cleaned: 1 item withheld for holding a secret; 2 email addresses replaced with placeholders." }
+```
+
+`teams_auth_status` is not cleaned: it describes this session, not anyone's message. Start the
+server with `--no-clean` to turn cleaning off. The detectors are the ones
+[simply-confluence-explorer](https://github.com/SimplySF/simply-confluence-explorer) uses before it
+sends a page to an AI; [design 0005](../../../../docs/design/0005-cleaning-before-the-agent.md)
+records what was ported and why messages are withheld whole.
 
 ## Results and errors
 
