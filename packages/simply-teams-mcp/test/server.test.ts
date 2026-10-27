@@ -38,6 +38,18 @@ const tokens: TokenProvider = {
     Promise.resolve({ token: 'secret-token', source: 'broker', scopes: ['https://graph.microsoft.com/User.Read'] }),
 };
 
+/** A token that holds the read scopes, so search goes to Graph rather than falling back to the chats (0007). */
+const readTokens: TokenProvider = {
+  getToken: () =>
+    Promise.resolve({
+      token: 'secret-token',
+      source: 'broker',
+      scopes: ['User.Read', 'Chat.Read', 'ChannelMessage.Read.All'].map(
+        (scope) => `https://graph.microsoft.com/${scope}`,
+      ),
+    }),
+};
+
 function context(overrides: Record<string, string> = {}, tokenProvider: TokenProvider = tokens) {
   return createContext({
     env: { TEAMS_CLIENT_ID: CLIENT, ...overrides },
@@ -193,7 +205,11 @@ describe('cleaning (design 0005)', () => {
       respondJson(res, 200, { value: [{ id: ch, displayName: 'General' }] }),
     );
 
-    const result = await invokeTool(spec('teams_message_context'), context(), { query: 'x', threads: 1, context: 1 });
+    const result = await invokeTool(spec('teams_message_context'), context({}, readTokens), {
+      query: 'x',
+      threads: 1,
+      context: 1,
+    });
     const body = payload(result) as {
       threads: Array<{ where?: string; hitIds: string[]; messages: Array<{ text: string; ref: string }> }>;
       cleaned: { summary: string };
@@ -204,6 +220,39 @@ describe('cleaning (design 0005)', () => {
     expect(body.threads[0]?.messages[0]?.text).toBe('ask [EMAIL-1]');
     expect(body.threads[0]?.messages[0]?.ref).toBe(`${team}/${ch}/100`);
     expect(body.cleaned.summary).toContain('1 email address');
+  });
+
+  it('reads chats instead of searching when asked, and says so (design 0007)', async () => {
+    const chatId = '19:chat@thread.v2';
+    server.route('/v1.0/me/chats', (_req, res) =>
+      respondJson(res, 200, { value: [{ id: chatId, chatType: 'oneOnOne' }] }),
+    );
+    server.route(`/v1.0/chats/${encodeURIComponent(chatId)}/messages`, (_req, res) => {
+      respondJson(res, 200, {
+        value: [
+          {
+            id: '1',
+            messageType: 'message',
+            chatId,
+            createdDateTime: '2026-10-26T14:00:00Z',
+            from: { user: { id: 'u', displayName: 'Ada' } },
+            body: { contentType: 'html', content: '<p>the deploy is done</p>' },
+          },
+        ],
+      });
+    });
+
+    const result = await invokeTool(spec('teams_message_search'), context(), {
+      query: 'deploy',
+      chatsOnly: true,
+      chats: 2,
+    });
+    const body = payload(result) as { scope: string; note: string; items: Array<{ summary: string }> };
+
+    expect(body.scope).toBe('chats');
+    expect(body.note).toContain('Only chats were searched');
+    expect(body.items[0]?.summary).toBe('the **deploy** is done');
+    expect(server.requests.some((request) => request.url.includes('/search/query'))).toBe(false);
   });
 
   it('hides a restored address that an error quotes in its request path, encoded or not', async () => {

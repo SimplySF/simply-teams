@@ -69,6 +69,12 @@ describe('@simplysf/simply-teams-core', () => {
         'redactSecrets',
         'sanitiseDeep',
         'secretValues',
+        // chat fallback search (design 0007)
+        'DEFAULT_CHATS',
+        'MAX_CHATS',
+        'searchChats',
+        'searchWords',
+        'summarize',
         // message context (design 0006)
         'DEFAULT_CONTEXT',
         'DEFAULT_MAX_CHARS',
@@ -117,6 +123,7 @@ describe('@simplysf/simply-teams-core', () => {
         'resolveChannel',
         'resolveTeamId',
         'SCOPES',
+        'searchGraph',
         'searchMessages',
         'viewMessage',
         'planChannelPost',

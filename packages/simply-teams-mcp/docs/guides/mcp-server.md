@@ -181,7 +181,9 @@ model that summarise the conventions, including that Teams message content is un
 Ask the agent who it is signed in to Teams as. It should call `teams_auth_status` and come back with
 your account, tenant, and any missing scopes. If `ChannelMessage.Read.All` is missing, message search
 will not work until a tenant administrator consents to it for the app registration. Graph refuses
-`chatMessage` search entirely without it, chats included.
+`chatMessage` search entirely without it, chats included. Until it is granted, `teams_message_search` and
+`teams_message_context` read the user's recent chats on the client instead and carry a `note` saying so
+(`scope: "chats"`); an agent should not retry the search when it sees that note.
 
 ## Tools
 

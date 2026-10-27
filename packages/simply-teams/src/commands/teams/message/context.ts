@@ -26,7 +26,12 @@ import {
 } from '@simplysf/simply-teams-core';
 import { cleanFlag, TeamsCommand } from '../../../shared/base-command.js';
 import { renderThread } from '../../../shared/message-output.js';
-import { searchFilterFlags, searchFiltersFrom } from '../../../shared/search-flags.js';
+import {
+  fallbackFlags,
+  searchFilterFlags,
+  searchFiltersFrom,
+  searchOptionsFrom,
+} from '../../../shared/search-flags.js';
 
 export default class MessageContextCommand extends TeamsCommand<typeof MessageContextCommand> {
   public static override readonly summary =
@@ -57,6 +62,7 @@ export default class MessageContextCommand extends TeamsCommand<typeof MessageCo
   public static override readonly flags = {
     ...cleanFlag,
     ...searchFilterFlags,
+    ...fallbackFlags,
     threads: Flags.integer({
       summary: 'How many threads to read, in relevance order.',
       default: DEFAULT_THREADS,
@@ -83,8 +89,10 @@ export default class MessageContextCommand extends TeamsCommand<typeof MessageCo
         threads: flags.threads,
         context: flags.context,
         maxChars: flags['max-chars'],
+        search: searchOptionsFrom(flags),
       }),
     );
+    if (result.note !== undefined) this.logSafe(`${result.note}\n`);
     if (result.threads.length === 0) {
       this.log(result.searched === 0 ? `No messages match: ${result.query}` : 'No thread could be read.');
     } else {

@@ -27,11 +27,11 @@ import {
   planChatSend,
   parseReplyRef,
   resolveChannel,
-  searchMessages,
   sendPlanned,
   viewMessage,
 } from '../src/operations.js';
 import { parseRef } from '../src/refs.js';
+import { searchMessages } from '../src/search.js';
 import { respondJson, startTestServer, type TestServer } from '../src/testing.js';
 import type { TokenProvider, TokenRequest } from '../src/token.js';
 

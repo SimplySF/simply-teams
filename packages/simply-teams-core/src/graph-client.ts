@@ -15,8 +15,9 @@
  */
 
 import type { TeamsConfig } from './config.js';
+import { AuthError } from './errors.js';
 import { HttpTransport, type QueryValue } from './http.js';
-import type { TokenProvider } from './token.js';
+import { BASE_SCOPES, missingScopes, type TokenProvider } from './token.js';
 
 /** Everything a caller needs after following pages: the items plus why paging stopped. */
 export interface ListResult<T = unknown> {
@@ -79,14 +80,36 @@ export interface GraphClientOptions {
  */
 export class GraphClient {
   private readonly transport: HttpTransport;
+  private readonly tokens: TokenProvider;
 
   public constructor(config: TeamsConfig, tokens: TokenProvider, options: GraphClientOptions = {}) {
+    this.tokens = tokens;
     this.transport = new HttpTransport({
       baseUrl: options.baseUrl ?? `${config.endpoints.graphUrl}/${API_VERSION}`,
       tokens,
       timeoutMs: options.timeoutMs,
       maxAttempts: options.maxAttempts,
     });
+  }
+
+  /**
+   * Whether a token for these scopes can be had without a prompt: `false` when the broker says
+   * consent is missing, or the token's scope list lacks one; `undefined` when the token does not
+   * say what it holds (an opaque `TEAMS_ACCESS_TOKEN`), so only Graph can tell (design 0007).
+   */
+  public async consented(scopes: readonly string[]): Promise<boolean | undefined> {
+    let granted: readonly string[];
+    try {
+      ({ scopes: granted } = await this.tokens.getToken({ scopes, silentOnly: true }));
+    } catch (error) {
+      if (!(error instanceof AuthError)) throw error;
+      // The broker says nothing about why. A token for the base scope tells them apart: if that
+      // cannot be had either, the sign-in itself is the problem, and that is what is reported.
+      await this.tokens.getToken({ scopes: BASE_SCOPES, silentOnly: true });
+      return false;
+    }
+    if (granted.length === 0) return undefined;
+    return missingScopes(granted, scopes).length === 0;
   }
 
   public me(): Promise<GraphUser> {

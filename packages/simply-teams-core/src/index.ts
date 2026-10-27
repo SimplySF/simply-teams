@@ -79,6 +79,14 @@ export { assertWritesAllowed, isReadOnly, READ_ONLY_ENV } from './write-safety.j
 export { collectSecrets, redactSecrets, sanitiseDeep, SECRET_ENV, secretValues } from './redaction.js';
 
 export {
+  DEFAULT_CHATS,
+  MAX_CHATS,
+  searchChats,
+  searchWords,
+  summarize,
+  type ChatSearchOptions,
+} from './chat-search.js';
+export {
   DEFAULT_CONTEXT,
   DEFAULT_MAX_CHARS,
   DEFAULT_THREADS,
@@ -88,6 +96,8 @@ export {
   type ContextThread,
   type MessageContext,
 } from './message-context.js';
+
+export { searchMessages, type SearchOptions } from './search.js';
 
 // --- Cleaning what an agent sees (design 0005) ---
 export { DETECTOR_TYPES, secretsIn, TeamsGuard, type FindingKind } from './guard.js';
@@ -147,7 +157,7 @@ export {
   resolveMentions,
   resolveTeamId,
   SCOPES,
-  searchMessages,
+  searchGraph,
   sendPlanned,
   viewMessage,
   type ChannelMessageOptions,

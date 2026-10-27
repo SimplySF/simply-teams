@@ -16,6 +16,7 @@
 
 import {
   authStatus,
+  DEFAULT_CHATS,
   DEFAULT_CONTEXT,
   DEFAULT_MAX_CHARS,
   DEFAULT_THREADS,
@@ -25,6 +26,7 @@ import {
   listChatMessages,
   listChats,
   listTeams,
+  MAX_CHATS,
   MAX_CONTEXT,
   MAX_THREADS,
   parseDate,
@@ -94,6 +96,19 @@ const SEARCH_FILTER_SHAPE = {
   since: date('Only messages sent on or after this'),
   until: date('Only messages sent on or before this'),
   mentionsMe: z.boolean().optional().describe('Only messages that @mention the user.'),
+  chatsOnly: z
+    .boolean()
+    .optional()
+    .describe(
+      'Read the user\'s recent chats instead of searching. This happens anyway, with a "note", when ChannelMessage.Read.All is not granted.',
+    ),
+  chats: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_CHATS)
+    .optional()
+    .describe(`How many recent chats a chat scan reads. Defaults to ${DEFAULT_CHATS}.`),
 };
 
 const searchFiltersFrom = (input: {
@@ -165,8 +180,8 @@ export const TOOLS: readonly ToolSpec[] = [
       'snippets ("summary", matches in **bold**), not full messages: pass a hit\'s "ref" to ' +
       'teams_message_view for the whole message and its context. "query" is KQL, so plain words ' +
       'work and the filters below are added for you. Requires admin consent for ' +
-      'ChannelMessage.Read.All; without it this returns an auth error, and teams_chat_messages ' +
-      'is the fallback for a known chat.' +
+      "ChannelMessage.Read.All; until it is granted, the user's recent chats are read instead and the " +
+      'result carries a "note" saying so (scope: "chats"), so do not retry the search.' +
       UNTRUSTED,
     command: ['teams', 'message', 'search'],
     kind: 'read',
@@ -174,7 +189,8 @@ export const TOOLS: readonly ToolSpec[] = [
       ...SEARCH_FILTER_SHAPE,
       limit: limit(25, 'results'),
     },
-    run: (ctx, input) => searchMessages(ctx.graph(), input.query ?? '', searchFiltersFrom(input), input.limit ?? 25),
+    run: (ctx, input) =>
+      searchMessages(ctx.graph(), input.query ?? '', searchFiltersFrom(input), input.limit ?? 25, input),
   }),
   tool({
     name: 'teams_message_view',
@@ -290,7 +306,8 @@ export const TOOLS: readonly ToolSpec[] = [
       'within a character budget. Prefer this over teams_message_search followed by ' +
       'teams_message_view when the question is "where was this discussed?" Each thread carries a ' +
       '"ref" for teams_message_view if more of it is needed. Requires admin consent for ' +
-      'ChannelMessage.Read.All.' +
+      "ChannelMessage.Read.All; until it is granted, the user's recent chats are read instead and the " +
+      'result carries a "note" saying so.' +
       UNTRUSTED,
     command: ['teams', 'message', 'context'],
     kind: 'read',
@@ -322,6 +339,7 @@ export const TOOLS: readonly ToolSpec[] = [
         threads: input.threads ?? DEFAULT_THREADS,
         context: input.context ?? DEFAULT_CONTEXT,
         maxChars: input.maxChars ?? DEFAULT_MAX_CHARS,
+        search: input,
       }),
   }),
 

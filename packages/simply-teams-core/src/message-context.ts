@@ -24,7 +24,8 @@ import {
   type TeamsMessage,
   type TeamsSearchHit,
 } from './messages.js';
-import { listChannels, listTeams, MAX_CONTEXT, SCOPES, searchMessages, viewMessage } from './operations.js';
+import { listChannels, listTeams, MAX_CONTEXT, SCOPES, viewMessage } from './operations.js';
+import { searchMessages, type SearchOptions } from './search.js';
 import { parseRef, type TeamsRef } from './refs.js';
 
 /** How a context call is bounded (design 0006). */
@@ -35,6 +36,8 @@ export interface ContextOptions {
   readonly context: number;
   /** A ceiling on the characters of message text returned. */
   readonly maxChars: number;
+  /** How the search may fall back to the user's chats (design 0007). */
+  readonly search?: SearchOptions;
 }
 
 export const MAX_THREADS = 20;
@@ -69,6 +72,10 @@ export interface MessageContext {
   readonly searched: number;
   /** False when more hits were available than were read. */
   readonly searchComplete: boolean;
+  /** `all` when Graph searched chats and channels; `chats` when only the user's chats were read (0007). */
+  readonly scope: 'all' | 'chats';
+  /** For a chat scan: what was and was not searched. */
+  readonly note?: string;
   /** In relevance order of their first hit. */
   readonly threads: readonly ContextThread[];
   /** Threads beyond `threads`, or that could not be read or fitted. Counts threads, never hits. */
@@ -261,7 +268,14 @@ export async function gatherMessageContext(
 ): Promise<MessageContext> {
   checkOptions(options);
 
-  const search = await searchMessages(graph, text, filters, Math.min(MAX_HITS, options.threads * HITS_PER_THREAD));
+  const search = await searchMessages(
+    graph,
+    text,
+    filters,
+    Math.min(MAX_HITS, options.threads * HITS_PER_THREAD),
+    // Under the chat fallback, cap each chat's hits so one busy chat cannot crowd the others out.
+    { ...options.search, hitsPerChat: HITS_PER_THREAD },
+  );
   const { groups, unreadable } = groupHits(search.items);
   const namer = new Namer(graph);
   const threads: ContextThread[] = [];
@@ -318,6 +332,8 @@ export async function gatherMessageContext(
     query: search.query,
     searched: search.items.length,
     searchComplete: search.complete,
+    scope: search.scope,
+    note: search.note,
     threads,
     skipped,
     unplaced: unreadable,

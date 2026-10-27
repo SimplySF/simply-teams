@@ -527,13 +527,16 @@ Find the conversations behind a question: search, then read the matching threads
 ```
 USAGE
   $ simply teams message context [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--threads
-    <value>] [--context <value>] [--max-chars <value>]
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--chats-only]
+    [--chats <value>] [--threads <value>] [--context <value>] [--max-chars <value>]
 
 ARGUMENTS
   [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
 
 FLAGS
+  --chats=<value>      [default: 20] How many recent chats a chat scan reads.
+  --chats-only         Read your recent chats instead of searching; what happens anyway when ChannelMessage.Read.All is
+                       not granted.
   --clean              Withhold messages that hold a secret and replace personal data with placeholders, as the MCP
                        server does.
   --context=<value>    [default: 10] Messages to read around each hit.
@@ -643,13 +646,16 @@ Search the chat and channel messages you can see.
 ```
 USAGE
   $ simply teams message search [QUERY] [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
-    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--limit
-    <value>]
+    global|usgov-high|dod] [--clean] [--from <value>] [--since <value>] [--until <value>] [--mentions-me] [--chats-only]
+    [--chats <value>] [--limit <value>]
 
 ARGUMENTS
   [QUERY]  Words or KQL to search for. Optional when a filter flag is given.
 
 FLAGS
+  --chats=<value>  [default: 20] How many recent chats a chat scan reads.
+  --chats-only     Read your recent chats instead of searching; what happens anyway when ChannelMessage.Read.All is not
+                   granted.
   --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
                    does.
   --from=<value>   Only messages from this person: a name or email address.
@@ -679,8 +685,8 @@ DESCRIPTION
   Each result is a snippet, not the whole message. Pass its ref to "teams message view" for the full text and, with
   --context, the conversation around it.
 
-  Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Graph refuses message search entirely
-  without it, even for chats.
+  Needs ChannelMessage.Read.All, which only a tenant administrator can consent to. Until it is granted, your recent
+  chats are read instead and the output says so; --chats-only asks for that outright.
 
 EXAMPLES
   Find where something was discussed
