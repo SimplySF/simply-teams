@@ -41,6 +41,7 @@ refactors that keep the public surface identical (though a short doc is welcome 
 | 0005 | [Cleaning what an agent sees: secrets withheld, personal data placeholdered](0005-cleaning-before-the-agent.md) | Implemented |
 | 0006 | [Message context: the threads behind a question, in one call](0006-message-context.md)                          | Implemented |
 | 0007 | [Searching chats before an administrator has consented](0007-search-before-admin-consent.md)                    | Implemented |
+| 0008 | [Meeting transcripts: what was said in the call, not just the chat](0008-meeting-transcripts.md)                | Implemented |
 
 ## Template
 

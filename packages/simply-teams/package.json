@@ -64,6 +64,9 @@
       },
       "teams:channel": {
         "description": "List channels, read their posts, and start a thread."
+      },
+      "teams:meeting": {
+        "description": "List the meetings you were in and read their transcripts."
       }
     }
   },

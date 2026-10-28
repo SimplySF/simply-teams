@@ -110,6 +110,8 @@ identical with and without `--json`.
 - [`simply teams chat list`](#simply-teams-chat-list)
 - [`simply teams chat messages CHAT`](#simply-teams-chat-messages-chat)
 - [`simply teams chat send CHAT`](#simply-teams-chat-send-chat)
+- [`simply teams meeting list`](#simply-teams-meeting-list)
+- [`simply teams meeting transcript MEETING`](#simply-teams-meeting-transcript-meeting)
 - [`simply teams message context [QUERY]`](#simply-teams-message-context-query)
 - [`simply teams message reply MESSAGE`](#simply-teams-message-reply-message)
 - [`simply teams message search [QUERY]`](#simply-teams-message-search-query)
@@ -519,6 +521,110 @@ FLAG DESCRIPTIONS
 ```
 
 _See code: [lib/commands/teams/chat/send.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/chat/send.js)_
+
+## `simply teams meeting list`
+
+List the meetings you were in, most recently active first.
+
+```
+USAGE
+  $ simply teams meeting list [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--clean] [--limit <value>]
+
+FLAGS
+  --clean          Withhold messages that hold a secret and replace personal data with placeholders, as the MCP server
+                   does.
+  --limit=<value>  [default: 20] Maximum number of meetings to return across all pages.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  List the meetings you were in, most recently active first.
+
+  The meeting chats among your chats, each with its subject, organizer and join link. Pass a meeting's ref to "teams
+  meeting transcript" for what was said, or to "teams chat messages" for the chat. Needs only Chat.Read. Graph has no
+  list of meetings short of the calendar, so a meeting whose chat you never saw is not here.
+
+EXAMPLES
+  $ simply teams meeting list --limit 10
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/meeting/list.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/meeting/list.js)_
+
+## `simply teams meeting transcript MEETING`
+
+Read what was said in a meeting: its transcript, by speaker and time.
+
+```
+USAGE
+  $ simply teams meeting transcript MEETING [--json] [-e <value>] [--client-id <value>] [--tenant <value>] [--cloud
+    global|usgov-high|dod] [--clean] [--find <value>] [-c <value>] [--start <value>] [--max-chars <value>]
+
+ARGUMENTS
+  MEETING  A meeting join link, a meeting chat link or ref, or a ref from "teams meeting list".
+
+FLAGS
+  -c, --context=<value>    [default: 2] With --find: how many utterances to show either side of a match.
+      --clean              Withhold messages that hold a secret and replace personal data with placeholders, as the MCP
+                           server does.
+      --find=<value>       Only utterances holding every one of these words, with their context.
+      --max-chars=<value>  [default: 24000] Stop after this much utterance text; 0 for all of it.
+      --start=<value>      Skip utterances before this offset into the meeting: mm:ss or h:mm:ss.
+
+CONNECTION FLAGS
+  -e, --env-file=<value>   Path to a .env file holding connection settings.
+      --client-id=<value>  [env: TEAMS_CLIENT_ID] Application (client) ID of the Entra app registration to sign in for.
+      --cloud=<option>     [env: TEAMS_CLOUD] Microsoft cloud to use. GCC Moderate tenants use global.
+                           <options: global|usgov-high|dod>
+      --tenant=<value>     [env: TEAMS_TENANT_ID] Tenant GUID or domain. Defaults to the home tenant of the account you
+                           are signed in with.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Read what was said in a meeting: its transcript, by speaker and time.
+
+  Takes a meeting join link, a meeting chat link or ref, or a ref from "teams meeting list". Consecutive lines by one
+  speaker are joined, so an hour of talk reads as a conversation rather than captions. --find keeps only the utterances
+  holding every given word, with --context utterances either side; --start skips ahead; --max-chars caps what is printed
+  and the last line says where to continue.
+
+  Needs OnlineMeetings.Read and OnlineMeetingTranscript.Read.All; the second needs a tenant administrator's consent. A
+  meeting has a transcript only if transcription was turned on during it, and only after it has been processed.
+
+EXAMPLES
+  Where the deploy script came up in a meeting
+
+    $ simply teams meeting transcript <meeting-ref> --find "deploy script"
+
+  The second part of a long meeting
+
+    $ simply teams meeting transcript <meeting-ref> --start 32:00
+
+FLAG DESCRIPTIONS
+  -e, --env-file=<value>  Path to a .env file holding connection settings.
+
+    Loaded before anything else. Variables already present in the environment win, so the file never overrides an
+    explicit export, and only simply-teams settings are read from it. A path that cannot be read is an error.
+```
+
+_See code: [lib/commands/teams/meeting/transcript.js](https://github.com/SimplySF/simply-teams/blob/@simplysf/simply-teams@0.0.0/packages/simply-teams/lib/commands/teams/meeting/transcript.js)_
 
 ## `simply teams message context [QUERY]`
 

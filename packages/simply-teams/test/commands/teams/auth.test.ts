@@ -73,7 +73,14 @@ describe('teams auth status', () => {
       displayName: 'Ada',
       tenantId: 'tid',
       source: 'environment',
-      missingScopes: ['User.ReadBasic.All', 'Team.ReadBasic.All', 'Channel.ReadBasic.All', 'ChannelMessage.Read.All'],
+      missingScopes: [
+        'User.ReadBasic.All',
+        'Team.ReadBasic.All',
+        'Channel.ReadBasic.All',
+        'OnlineMeetings.Read',
+        'ChannelMessage.Read.All',
+        'OnlineMeetingTranscript.Read.All',
+      ],
     });
     expect(JSON.stringify(status)).not.toContain(TOKEN);
   });

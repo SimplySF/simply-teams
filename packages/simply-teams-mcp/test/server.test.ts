@@ -255,6 +255,39 @@ describe('cleaning (design 0005)', () => {
     expect(server.requests.some((request) => request.url.includes('/search/query'))).toBe(false);
   });
 
+  it('withholds an utterance holding a secret in a meeting transcript, keeping its time and speaker (design 0008)', async () => {
+    const meeting = '19:meeting_abc@thread.v2';
+    const join = 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0';
+    server.route(`/v1.0/chats/${encodeURIComponent(meeting)}`, (_req, res) =>
+      respondJson(res, 200, { id: meeting, chatType: 'meeting', onlineMeetingInfo: { joinWebUrl: join } }),
+    );
+    server.route('/v1.0/me/onlineMeetings', (_req, res) =>
+      respondJson(res, 200, { value: [{ id: 'M1', subject: 'Keys' }] }),
+    );
+    server.route('/v1.0/me/onlineMeetings/M1/transcripts', (_req, res) =>
+      respondJson(res, 200, { value: [{ id: 'T1', createdDateTime: '2026-10-20T10:01:00Z' }] }),
+    );
+    server.route('/v1.0/me/onlineMeetings/M1/transcripts/T1/content', (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/vtt' });
+      res.end(
+        `WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Ada>the key is ${aws}</v>\n\n00:00:03.000 --> 00:00:04.000\n<v Bo>mail jane.doe@example.com</v>\n`,
+      );
+    });
+
+    const result = await invokeTool(spec('teams_meeting_transcript'), context(), { meeting });
+    const body = payload(result) as {
+      utterances: Array<{ at: string; speaker?: string; text: string }>;
+      cleaned: { withheld: number };
+    };
+
+    expect(body.utterances).toStrictEqual([
+      { at: '00:00:01', seconds: 1, speaker: 'Ada', text: '[withheld: contains a secret (AWS access key)]' },
+      { at: '00:00:03', seconds: 3, speaker: 'Bo', text: 'mail [EMAIL-1]' },
+    ]);
+    expect(body.cleaned.withheld).toBe(1);
+    expect(JSON.stringify(result)).not.toContain(aws);
+  });
+
   it('hides a restored address that an error quotes in its request path, encoded or not', async () => {
     const ctx = context();
     server.route(path, (_req, res) => {

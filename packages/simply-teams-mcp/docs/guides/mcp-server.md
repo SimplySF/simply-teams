@@ -187,20 +187,22 @@ will not work until a tenant administrator consents to it for the app registrati
 
 ## Tools
 
-| Tool                     | Read or write | Equivalent command       | What it returns                                                                |
-| ------------------------ | ------------- | ------------------------ | ------------------------------------------------------------------------------ |
-| `teams_auth_status`      | read          | `teams auth status`      | Account, tenant, cloud, token source and expiry, missing read and write scopes |
-| `teams_message_search`   | read          | `teams message search`   | Hits with a highlighted summary and a `ref`                                    |
-| `teams_message_view`     | read          | `teams message view`     | One message, with context around it when asked                                 |
-| `teams_message_context`  | read          | `teams message context`  | The threads behind a question: search, then each matching thread, in one call  |
-| `teams_chat_list`        | read          | `teams chat list`        | Chats with their last message preview                                          |
-| `teams_chat_messages`    | read          | `teams chat messages`    | A chat's messages, oldest first                                                |
-| `teams_team_list`        | read          | `teams team list`        | Joined teams                                                                   |
-| `teams_channel_list`     | read          | `teams channel list`     | A team's channels                                                              |
-| `teams_channel_messages` | read          | `teams channel messages` | A channel's posts, with replies when asked                                     |
-| `teams_channel_post`     | write         | `teams channel post`     | The posted message, or the request under `dryRun`                              |
-| `teams_message_reply`    | write         | `teams message reply`    | The posted reply, or the request under `dryRun`                                |
-| `teams_chat_send`        | write         | `teams chat send`        | The sent message, or the request under `dryRun`                                |
+| Tool                       | Read or write | Equivalent command         | What it returns                                                                |
+| -------------------------- | ------------- | -------------------------- | ------------------------------------------------------------------------------ |
+| `teams_auth_status`        | read          | `teams auth status`        | Account, tenant, cloud, token source and expiry, missing read and write scopes |
+| `teams_message_search`     | read          | `teams message search`     | Hits with a highlighted summary and a `ref`                                    |
+| `teams_message_view`       | read          | `teams message view`       | One message, with context around it when asked                                 |
+| `teams_message_context`    | read          | `teams message context`    | The threads behind a question: search, then each matching thread, in one call  |
+| `teams_chat_list`          | read          | `teams chat list`          | Chats with their last message preview                                          |
+| `teams_chat_messages`      | read          | `teams chat messages`      | A chat's messages, oldest first                                                |
+| `teams_team_list`          | read          | `teams team list`          | Joined teams                                                                   |
+| `teams_channel_list`       | read          | `teams channel list`       | A team's channels                                                              |
+| `teams_channel_messages`   | read          | `teams channel messages`   | A channel's posts, with replies when asked                                     |
+| `teams_meeting_list`       | read          | `teams meeting list`       | The meetings the user was in, with subject, organizer and join link            |
+| `teams_meeting_transcript` | read          | `teams meeting transcript` | A meeting's transcript as utterances, narrowed by `find`, within a budget      |
+| `teams_channel_post`       | write         | `teams channel post`       | The posted message, or the request under `dryRun`                              |
+| `teams_message_reply`      | write         | `teams message reply`      | The posted reply, or the request under `dryRun`                                |
+| `teams_chat_send`          | write         | `teams chat send`          | The sent message, or the request under `dryRun`                                |
 
 `teams auth login` deliberately has no tool, because signing in is something a person does at a
 terminal.

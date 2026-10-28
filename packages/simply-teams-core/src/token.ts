@@ -74,13 +74,15 @@ export const USER_CONSENT_SCOPES = [
   'Chat.Read',
   'Team.ReadBasic.All',
   'Channel.ReadBasic.All',
+  'OnlineMeetings.Read',
 ] as const;
 
 /**
  * The read scopes only a tenant administrator can grant. Graph refuses `chatMessage` search
- * entirely without `ChannelMessage.Read.All`, even for chats.
+ * entirely without `ChannelMessage.Read.All`, even for chats; meeting transcripts need
+ * `OnlineMeetingTranscript.Read.All` (design 0008). Both are requested silently by `auth login`.
  */
-export const ADMIN_CONSENT_SCOPES = ['ChannelMessage.Read.All'] as const;
+export const ADMIN_CONSENT_SCOPES = ['ChannelMessage.Read.All', 'OnlineMeetingTranscript.Read.All'] as const;
 
 /** Every delegated scope the read commands need between them (design 0001, Scopes). */
 export const READ_SCOPES = [...USER_CONSENT_SCOPES, ...ADMIN_CONSENT_SCOPES] as const;
@@ -106,6 +108,7 @@ const SATISFIED_BY: Readonly<Record<string, readonly string[]>> = {
   'Chat.Read': ['Chat.ReadWrite'],
   'Team.ReadBasic.All': ['TeamSettings.Read.All', 'TeamSettings.ReadWrite.All', 'Directory.Read.All'],
   'Channel.ReadBasic.All': ['ChannelSettings.Read.All', 'ChannelSettings.ReadWrite.All', 'Directory.Read.All'],
+  'OnlineMeetings.Read': ['OnlineMeetings.ReadWrite'],
 };
 
 /** Fully qualified scopes for one cloud: Entra ID needs the Graph resource as the prefix. */

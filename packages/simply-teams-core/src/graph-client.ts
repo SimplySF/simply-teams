@@ -120,6 +120,15 @@ export class GraphClient {
     return this.transport.json<T>({ method: 'GET', path, query, scopes });
   }
 
+  /** A GET whose body is not JSON: a transcript as WebVTT (design 0008). `accept` defaults to `text/plain`. */
+  public getText(
+    path: string,
+    scopes: readonly string[],
+    options: { readonly query?: Record<string, QueryValue>; readonly accept?: string } = {},
+  ): Promise<string> {
+    return this.transport.text({ method: 'GET', path, query: options.query, scopes, accept: options.accept });
+  }
+
   /** A POST that reads, such as `/search/query`. Writes go through {@link send}. */
   public post<T>(path: string, body: unknown, scopes: readonly string[]): Promise<T> {
     return this.transport.json<T>({ method: 'POST', path, body, scopes });

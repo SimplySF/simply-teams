@@ -18,24 +18,31 @@ import {
   authStatus,
   DEFAULT_CHATS,
   DEFAULT_CONTEXT,
+  DEFAULT_FIND_CONTEXT,
   DEFAULT_MAX_CHARS,
+  DEFAULT_MEETINGS,
   DEFAULT_THREADS,
   gatherMessageContext,
   listChannelMessages,
   listChannels,
   listChatMessages,
   listChats,
+  listMeetings,
   listTeams,
   MAX_CHATS,
   MAX_CONTEXT,
+  MAX_FIND_CONTEXT,
+  MAX_MEETINGS,
   MAX_THREADS,
   parseDate,
+  parseOffset,
   parseRef,
   parseReplyRef,
   planChannelPost,
   planChannelReply,
   planChatSend,
   type PlannedWrite,
+  readTranscript,
   searchMessages,
   sendPlanned,
   viewMessage,
@@ -340,6 +347,73 @@ export const TOOLS: readonly ToolSpec[] = [
         context: input.context ?? DEFAULT_CONTEXT,
         maxChars: input.maxChars ?? DEFAULT_MAX_CHARS,
         search: input,
+      }),
+  }),
+
+  // --- Meetings (design 0008) ---
+  tool({
+    name: 'teams_meeting_list',
+    title: 'Teams: list meetings',
+    description:
+      'List the meetings the user was in, most recently active first: the meeting chats, each with ' +
+      'its subject, organizer and join link. Pass a meeting\'s "ref" to teams_meeting_transcript for ' +
+      'what was said, or to teams_chat_messages for its chat. Needs only Chat.Read.',
+    command: ['teams', 'meeting', 'list'],
+    kind: 'read',
+    inputSchema: {
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_MEETINGS)
+        .optional()
+        .describe(`Maximum number of meetings to return. Defaults to ${DEFAULT_MEETINGS}.`),
+    },
+    run: (ctx, input) => listMeetings(ctx.graph(), input.limit ?? DEFAULT_MEETINGS),
+  }),
+  tool({
+    name: 'teams_meeting_transcript',
+    title: 'Teams: read a meeting transcript',
+    description:
+      'What was said in a meeting, by speaker and time, from its transcript. Takes a meeting join ' +
+      'link, a meeting chat link or ref, or a "ref" from teams_meeting_list. Use "find" to keep only ' +
+      'the utterances holding every given word, with "context" utterances either side; the result ' +
+      'says how many matched. A long transcript is cut at "maxChars" with "truncated": true and ' +
+      '"nextStart": pass that as "start" to continue. Needs OnlineMeetings.Read and ' +
+      'OnlineMeetingTranscript.Read.All (admin consent). A meeting has a transcript only if ' +
+      'transcription was on during it; the result says so when there is none.' +
+      UNTRUSTED,
+    command: ['teams', 'meeting', 'transcript'],
+    kind: 'read',
+    inputSchema: {
+      meeting: z
+        .string()
+        .describe('A meeting join link, a meeting chat link or ref, or a ref from teams_meeting_list.'),
+      find: z
+        .string()
+        .optional()
+        .describe('Words that must all appear in an utterance; only those and their context are returned.'),
+      context: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_FIND_CONTEXT)
+        .optional()
+        .describe(`With find: utterances either side of each match. Defaults to ${DEFAULT_FIND_CONTEXT}.`),
+      start: z.string().optional().describe('Skip utterances before this offset into the meeting: mm:ss or h:mm:ss.'),
+      maxChars: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(`A ceiling on the utterance text returned; 0 for none. Defaults to ${DEFAULT_MAX_CHARS}.`),
+    },
+    run: (ctx, input) =>
+      readTranscript(ctx.graph(), parseRef(input.meeting, ['chat', 'chatMessage']).chatId, {
+        find: input.find,
+        context: input.context ?? DEFAULT_FIND_CONTEXT,
+        start: input.start === undefined ? undefined : parseOffset(input.start),
+        maxChars: input.maxChars ?? DEFAULT_MAX_CHARS,
       }),
   }),
 

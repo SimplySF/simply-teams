@@ -68,6 +68,12 @@ function decode(segment: string): string {
   }
 }
 
+/** A meeting's join link carries its meeting chat's ID as its first segment (design 0008). */
+function meetingChat(segment: string): TeamsRef {
+  if (!CHAT_ID.test(segment)) throw new ConfigError('The meeting link does not name a meeting chat.');
+  return { kind: 'chat', chatId: segment };
+}
+
 /** Parses a Teams "Copy link" URL. */
 function parseLink(url: URL): TeamsRef {
   if (!TEAMS_HOSTS.has(url.hostname.toLowerCase())) {
@@ -95,6 +101,8 @@ function parseLink(url: URL): TeamsRef {
     }
     case 'chat':
       return { kind: 'chat', chatId: first };
+    case 'meetup-join':
+      return meetingChat(first);
     case 'channel':
     case 'team':
       if (groupId === undefined) throw new ConfigError('The channel link has no groupId, so its team is unknown.');
@@ -103,7 +111,7 @@ function parseLink(url: URL): TeamsRef {
         : { kind: 'channel', team: { id: groupId }, channel: { id: first } };
     default:
       throw new ConfigError(
-        `Teams links to ${kind ?? 'that'} are not supported; use a chat, channel, or message link.`,
+        `Teams links to ${kind ?? 'that'} are not supported; use a chat, channel, meeting, or message link.`,
       );
   }
 }
