@@ -59,6 +59,8 @@ export interface GraphSearchHit {
     readonly from?: {
       readonly emailAddress?: { readonly name?: string | null; readonly address?: string | null } | null;
     } | null;
+    /** The hit's Teams link. Graph names it `webLink` on search hits, unlike a message's `webUrl`. */
+    readonly webLink?: string | null;
     readonly webUrl?: string | null;
   };
 }
@@ -250,32 +252,39 @@ export function renderSummary(summary: string): string {
 
 /**
  * Turns a search hit into a result that can be passed back to `message view`. Search hits carry no
- * reply-to ID, but a channel reply's `webUrl` names its root post, and fetching a reply needs it,
- * so the link is preferred when it parses.
+ * reply-to ID. Their Teams link (`webLink`, which Graph names differently from a message's
+ * `webUrl`) names a channel reply's root post on some tenants, and that is taken; on others it is
+ * the bare `/l/message/{channelId}/{id}` form, and the ref then names only the message.
+ * `viewMessage` and the context reader resolve such a ref to its thread.
  */
+/**
+ * The root post a channel reply's Teams link names, when it does. The IDs on a hit are always
+ * right and the link can only add this: a bare link (no `groupId`) would parse as a chat message,
+ * and not every hit links to Teams at all (search has returned Outlook links for chats), so the
+ * link is never trusted over the IDs.
+ */
+function linkedRoot(link: string | undefined, id: string): string | undefined {
+  if (link === undefined) return undefined;
+  try {
+    const parsed = parseRef(link, ['chatMessage', 'channelMessage']);
+    return parsed.kind === 'channelMessage' && parsed.messageId === id ? parsed.rootId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function normalizeSearchHit(hit: GraphSearchHit): TeamsSearchHit {
   const resource = hit.resource ?? {};
   const id = resource.id ?? '';
   const chatId = present(resource.chatId);
   const teamId = present(resource.channelIdentity?.teamId);
   const channelId = present(resource.channelIdentity?.channelId);
-  const webUrl = present(resource.webUrl);
+  const webUrl = present(resource.webLink) ?? present(resource.webUrl);
 
-  let ref =
+  const ref =
     teamId !== undefined && channelId !== undefined
-      ? channelMessageRef(teamId, channelId, id)
+      ? channelMessageRef(teamId, channelId, id, linkedRoot(webUrl, id))
       : chatMessageRef(chatId ?? '', id);
-  if (webUrl !== undefined) {
-    try {
-      const parsed = parseRef(webUrl, ['chatMessage', 'channelMessage']);
-      ref =
-        parsed.kind === 'chatMessage'
-          ? chatMessageRef(parsed.chatId, parsed.messageId)
-          : channelMessageRef(parsed.teamId, parsed.channelId, parsed.messageId, parsed.rootId);
-    } catch {
-      // Not every hit links to Teams (search has returned Outlook links for chats); keep the IDs.
-    }
-  }
 
   const sender = resource.from?.emailAddress;
   return {

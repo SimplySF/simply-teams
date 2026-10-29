@@ -201,6 +201,48 @@ describe('viewMessage', () => {
     expect(requested.every((request) => request.scopes?.[0] === 'ChannelMessage.Read.All')).toBe(true);
   });
 
+  it('reads a channel reply whose ref names only the reply, by finding its root in the channel', async () => {
+    const base = `/v1.0/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages`;
+    const channelMessage = (id: number, replyTo?: number): Record<string, unknown> =>
+      message(id, {
+        chatId: null,
+        replyToId: replyTo === undefined ? null : String(replyTo),
+        channelIdentity: { teamId: TEAM, channelId: CHANNEL },
+      });
+    // Graph answers 404 for a reply fetched as a root, exactly as it does for a deleted post.
+    server.route(`${base}/103`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    server.route(`${base}/103/replies`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    server.route(base, (_req, res) =>
+      respondJson(res, 200, {
+        value: [
+          { id: '200', replies: [] },
+          { id: '100', replies: [{ id: '103' }] },
+        ],
+      }),
+    );
+    server.route(`${base}/100/replies/103`, (_req, res) => respondJson(res, 200, channelMessage(103, 100)));
+    server.route(`${base}/100`, (_req, res) => respondJson(res, 200, channelMessage(100)));
+    server.route(`${base}/100/replies`, (_req, res) =>
+      respondJson(res, 200, { value: [104, 103, 102].map((id) => channelMessage(id, 100)) }),
+    );
+
+    const ref = { kind: 'channelMessage', teamId: TEAM, channelId: CHANNEL, messageId: '103' } as const;
+    const alone = await viewMessage(graph(), ref);
+    expect(alone.message.ref).toBe(`${TEAM}/${CHANNEL}/100/103`);
+    const view = await viewMessage(graph(), ref, 1);
+    expect(view.thread.map((item) => item.id)).toStrictEqual(['100', '102', '103', '104']);
+    expect(server.requests.filter((request) => request.url.includes('%24expand=replies'))).toHaveLength(2);
+  });
+
+  it('reports a message that is neither a post nor a recent reply as not found, naming both cases', async () => {
+    const base = `/v1.0/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages`;
+    server.route(`${base}/9`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    server.route(base, (_req, res) => respondJson(res, 200, { value: [{ id: '100', replies: [{ id: '101' }] }] }));
+    await expect(
+      viewMessage(graph(), { kind: 'channelMessage', teamId: TEAM, channelId: CHANNEL, messageId: '9' }),
+    ).rejects.toThrow(/not a post in the channel, nor a reply to one of its 150 newest posts/);
+  });
+
   it('refuses a context outside 0..50', async () => {
     await expect(viewMessage(graph(), { kind: 'chatMessage', chatId: CHAT, messageId: '1' }, 51)).rejects.toThrow(
       ConfigError,
@@ -301,6 +343,54 @@ describe('writes (design 0004)', () => {
     });
     expect(planned.path).toBe(`/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages/100/replies`);
     expect(planned.scopes).toStrictEqual(['ChannelMessage.Send']);
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it('threads a reply posted under a search hit that names only a reply, after Graph answers 404', async () => {
+    const posted: string[] = [];
+    // What Graph answered on 2026-10-29 for a reply posted under a reply.
+    const refused = {
+      error: {
+        code: 'BadRequest',
+        message: 'InvalidParameter',
+        innerError: { code: '1', message: 'PostOperationNotSupported-Cannot create post on reply message ' },
+      },
+    };
+    server.route(`${base}/105/replies`, (_req, res) => {
+      posted.push('105');
+      respondJson(res, 400, refused);
+    });
+    server.route(base, (_req, res) => respondJson(res, 200, { value: [{ id: '100', replies: [{ id: '105' }] }] }));
+    server.route(`${base}/100/replies`, (_req, res) => {
+      posted.push('100');
+      respondJson(
+        res,
+        201,
+        message(106, { chatId: null, replyToId: '100', channelIdentity: { teamId: TEAM, channelId: CHANNEL } }),
+      );
+    });
+    const planned = await planChannelReply(graph(), parseRef(`${TEAM}/${CHANNEL}/105`, ['channelMessage']), {
+      text: 'agreed',
+    });
+    // Planning sends nothing and asks nothing: the plan names the message it was given.
+    expect(planned.path).toBe(`/teams/${TEAM}/channels/${encodeURIComponent(CHANNEL)}/messages/105/replies`);
+    expect(server.requests).toHaveLength(0);
+    const sent = await sendPlanned(graph(), planned);
+    expect(posted).toStrictEqual(['105', '100']);
+    expect(sent.ref).toBe(`${TEAM}/${CHANNEL}/100/106`);
+  });
+
+  it('leaves the refusal in place, naming the way out, when the thread cannot be found', async () => {
+    server.route(`${base}/105/replies`, (_req, res) => respondJson(res, 404, { error: { code: 'NotFound' } }));
+    // A write-only token cannot list the channel.
+    server.route(base, (_req, res) => respondJson(res, 403, { error: { code: 'Forbidden' } }));
+    const planned = await planChannelReply(graph(), parseRef(`${TEAM}/${CHANNEL}/105`, ['channelMessage']), {
+      text: 'agreed',
+    });
+    await expect(sendPlanned(graph(), planned)).rejects.toThrow(
+      /a ref from "message view", or a Teams link, names the thread/,
+    );
+    expect(server.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
   });
 
   it('plans a write without sending anything, so a dry run needs no write scope', async () => {

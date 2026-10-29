@@ -37,6 +37,7 @@ import {
 } from './message-body.js';
 import { parseRef, type Selector, type TeamsRef } from './refs.js';
 import { stripControlOneLine } from './text.js';
+import { ROOT_SCAN_PAGE_SIZE, ROOT_SCAN_PAGES, ThreadRoots } from './thread-root.js';
 
 /** The scopes each kind of read needs (design 0002, Commands). Each call asks for exactly these. */
 export const SCOPES = {
@@ -214,10 +215,19 @@ async function channelContext(
   return { thread: [normalizeMessage(root), ...window], warnings };
 }
 
+function notInChannel(messageId: string, cause: HttpError): HttpError {
+  return new HttpError(
+    `Message ${messageId} is not a post in the channel, nor a reply to one of its ${ROOT_SCAN_PAGES * ROOT_SCAN_PAGE_SIZE} newest posts. It may have been deleted, or belong to an older thread: a link to it names the thread.`,
+    404,
+    cause.body,
+  );
+}
+
 export async function viewMessage(
   graph: GraphClient,
   ref: Extract<TeamsRef, { kind: 'chatMessage' | 'channelMessage' }>,
   context = 0,
+  roots: ThreadRoots = new ThreadRoots(graph),
 ): Promise<MessageView> {
   if (!Number.isInteger(context) || context < 0 || context > MAX_CONTEXT) {
     throw new ConfigError(`Context must be a whole number from 0 to ${MAX_CONTEXT}.`);
@@ -231,6 +241,23 @@ export async function viewMessage(
     return { message: normalizeMessage(raw), ...around };
   }
 
+  try {
+    return await viewChannelMessage(graph, ref, context);
+  } catch (error) {
+    // A ref that names only the message, answered 404: a reply read as a root looks exactly like
+    // a deleted post. The channel's newest threads say which it is.
+    if (ref.rootId !== undefined || !(error instanceof HttpError && error.status === 404)) throw error;
+    const rootId = await roots.rootOf(ref.teamId, ref.channelId, ref.messageId);
+    if (rootId === undefined || rootId === ref.messageId) throw notInChannel(ref.messageId, error);
+    return viewChannelMessage(graph, { ...ref, rootId }, context);
+  }
+}
+
+async function viewChannelMessage(
+  graph: GraphClient,
+  ref: Extract<TeamsRef, { kind: 'channelMessage' }>,
+  context: number,
+): Promise<MessageView> {
   const base = `/teams/${encode(ref.teamId)}/channels/${encode(ref.channelId)}/messages`;
   const path =
     ref.rootId === undefined
@@ -571,7 +598,9 @@ export async function planChannelPost(
 
 /**
  * A reply in a channel thread. A reply's ref names its root, and Teams threads are one level
- * deep, so replying to a reply replies to the thread it is in.
+ * deep, so replying to a reply replies to the thread it is in. A ref that names only a reply (a
+ * search hit's can, see 0002) is posted to as if it were the root; Graph answers 404, and
+ * {@link sendPlanned} then finds the thread and posts again.
  */
 export async function planChannelReply(
   graph: GraphClient,
@@ -592,7 +621,11 @@ export async function planChatSend(graph: GraphClient, chatId: string, input: Wr
  * Sends a planned write and returns what Teams stored, in the same shape the read commands
  * return. Sent once: a failure that could have followed a posted message is reported, not retried.
  */
-export async function sendPlanned(graph: GraphClient, planned: PlannedWrite): Promise<TeamsMessage> {
+export async function sendPlanned(
+  graph: GraphClient,
+  planned: PlannedWrite,
+  roots: ThreadRoots = new ThreadRoots(graph),
+): Promise<TeamsMessage> {
   try {
     const raw = await graph.send<GraphChatMessage>(planned.path, planned.body, planned.scopes);
     return normalizeMessage(raw);
@@ -604,6 +637,42 @@ export async function sendPlanned(graph: GraphClient, planned: PlannedWrite): Pr
         error.status,
       );
     }
-    throw error;
+    // A reply posted under a message that is itself a reply: Graph refuses it (seen 2026-10-29 as
+    // 400 "PostOperationNotSupported-Cannot create post on reply message"; a 404 is a message it
+    // does not serve at that path, which a reply also is), nothing was posted, and the thread is
+    // found among the channel's newest posts. That needs the read scope; a write-only token keeps
+    // the refusal as it is, with the way out named.
+    if (!isRefusedReplyTarget(error)) throw error;
+    const target = replyTarget(planned.path);
+    if (target === undefined) throw error;
+    const rootId = await roots.rootOf(target.teamId, target.channelId, target.messageId);
+    if (rootId === undefined || rootId === target.messageId) {
+      throw new HttpError(
+        `${error.message} The ref may name a reply rather than its thread: a ref from "message view", or a Teams link, names the thread.`,
+        error.status,
+        error.body,
+      );
+    }
+    const path = `/teams/${encode(target.teamId)}/channels/${encode(target.channelId)}/messages/${encode(rootId)}/replies`;
+    const raw = await graph.send<GraphChatMessage>(path, planned.body, planned.scopes);
+    return normalizeMessage(raw);
   }
+}
+
+/** Graph's answer to a reply posted under something that is not a root post. */
+function isRefusedReplyTarget(error: unknown): error is HttpError {
+  if (!(error instanceof HttpError)) return false;
+  if (error.status === 404) return true;
+  const inner = (error.body as { error?: { innerError?: { message?: unknown } } } | undefined)?.error?.innerError;
+  return (
+    error.status === 400 && typeof inner?.message === 'string' && inner.message.includes('PostOperationNotSupported')
+  );
+}
+
+/** The channel and message a reply plan posts under, read back from its path. */
+function replyTarget(path: string): { teamId: string; channelId: string; messageId: string } | undefined {
+  const match = /^\/teams\/([^/]+)\/channels\/([^/]+)\/messages\/([^/]+)\/replies$/.exec(path);
+  if (match === null) return undefined;
+  const [, teamId, channelId, messageId] = match.map((part) => decodeURIComponent(part));
+  return { teamId, channelId, messageId };
 }

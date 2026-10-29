@@ -216,7 +216,7 @@ describe('teams message context (design 0006)', () => {
                       id: '100',
                       ...channelWhere,
                       from: { user: { displayName: 'Ada' } },
-                      webUrl: `https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/100?groupId=${TEAM}&parentMessageId=100`,
+                      webLink: `https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/100?groupId=${TEAM}&parentMessageId=100`,
                     },
                   },
                 ],
@@ -226,6 +226,10 @@ describe('teams message context (design 0006)', () => {
           },
         ],
       })
+      // A hit naming only its own ID is placed in its thread from the channel's newest posts first.
+      .get(`/v1.0/teams/${TEAM}/channels/19%3Aabc%40thread.tacv2/messages`)
+      .query(true)
+      .reply(200, { value: [{ id: '100', replies: [{ id: '101' }] }] })
       // The root is fetched for the message itself, then again with its replies for the thread.
       .get(root)
       .query(true)

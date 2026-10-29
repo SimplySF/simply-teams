@@ -27,6 +27,7 @@ import {
 import { listChannels, listTeams, MAX_CONTEXT, SCOPES, viewMessage } from './operations.js';
 import { searchMessages, type SearchOptions } from './search.js';
 import { parseRef, type TeamsRef } from './refs.js';
+import { ThreadRoots } from './thread-root.js';
 
 /** How a context call is bounded (design 0006). */
 export interface ContextOptions {
@@ -107,10 +108,21 @@ function threadKey(ref: Extract<TeamsRef, { kind: 'chatMessage' | 'channelMessag
     : `channel:${ref.teamId}/${ref.channelId}/${ref.rootId ?? ref.messageId}`;
 }
 
-/** Groups hits by thread, in the order their first hit came back; hits with no readable ref are counted. */
-function groupHits(hits: readonly TeamsSearchHit[]): { groups: Group[]; unreadable: number } {
+/**
+ * Groups hits by thread, in the order their first hit came back; hits with no readable ref are
+ * counted. A channel hit whose ref names only the message is placed first: when the hit is a reply,
+ * its thread is the root's, and two replies to one post must make one thread, not two. The lookup
+ * reads the channel's newest posts once per channel (see {@link ThreadRoots}); a message it does not
+ * find keeps its own ID as the key, and reading it then says whether it is a root or gone.
+ */
+async function groupHits(
+  hits: readonly TeamsSearchHit[],
+  roots: ThreadRoots,
+): Promise<{ groups: Group[]; unreadable: number }> {
   const groups = new Map<string, Group>();
   let unreadable = 0;
+  /* One lookup at a time: each may read a page, and they share what was read. */
+  /* eslint-disable no-await-in-loop */
   for (const hit of hits) {
     let ref: Extract<TeamsRef, { kind: 'chatMessage' | 'channelMessage' }>;
     try {
@@ -119,11 +131,16 @@ function groupHits(hits: readonly TeamsSearchHit[]): { groups: Group[]; unreadab
       unreadable += 1; // Search's own output still lists it; it cannot be read as a thread.
       continue;
     }
+    if (ref.kind === 'channelMessage' && ref.rootId === undefined) {
+      const rootId = await roots.rootOf(ref.teamId, ref.channelId, ref.messageId);
+      if (rootId !== undefined && rootId !== ref.messageId) ref = { ...ref, rootId };
+    }
     const key = threadKey(ref);
     const group = groups.get(key);
     if (group === undefined) groups.set(key, { key, first: hit, ref, ids: [hit.id] });
     else group.ids.push(hit.id);
   }
+  /* eslint-enable no-await-in-loop */
   return { groups: [...groups.values()], unreadable };
 }
 
@@ -237,9 +254,10 @@ async function readThread(
   graph: GraphClient,
   group: Group,
   context: number,
+  roots: ThreadRoots,
 ): Promise<{ messages: TeamsMessage[]; warnings: readonly string[] } | undefined> {
   try {
-    const view = await viewMessage(graph, group.ref, context);
+    const view = await viewMessage(graph, group.ref, context, roots);
     return { messages: view.thread.length === 0 ? [view.message] : [...view.thread], warnings: view.warnings };
   } catch (error) {
     if ((error instanceof AuthError && error.status === 403) || (error instanceof HttpError && error.status === 404)) {
@@ -276,7 +294,8 @@ export async function gatherMessageContext(
     // Under the chat fallback, cap each chat's hits so one busy chat cannot crowd the others out.
     { ...options.search, hitsPerChat: HITS_PER_THREAD },
   );
-  const { groups, unreadable } = groupHits(search.items);
+  const roots = new ThreadRoots(graph);
+  const { groups, unreadable } = await groupHits(search.items, roots);
   const namer = new Namer(graph);
   const threads: ContextThread[] = [];
   const wanted = groups.slice(0, options.threads);
@@ -293,7 +312,7 @@ export async function gatherMessageContext(
       truncated = true;
       break;
     }
-    const view = await readThread(graph, group, options.context);
+    const view = await readThread(graph, group, options.context, roots);
     if (view === undefined) {
       // One unreadable thread must not cost the agent every other thread.
       skipped += 1;

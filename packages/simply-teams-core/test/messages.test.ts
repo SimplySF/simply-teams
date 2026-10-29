@@ -118,14 +118,27 @@ describe('search hits', () => {
         id: '9',
         channelIdentity: { teamId: TEAM, channelId: CHANNEL },
         from: { emailAddress: { name: 'Ada', address: 'ada@contoso.com' } },
-        webUrl: `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/9?groupId=${TEAM}&parentMessageId=1`,
+        webLink: `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/9?groupId=${TEAM}&parentMessageId=1`,
       },
     });
     expect(hit).toMatchObject({
       ref: `${TEAM}/${CHANNEL}/1/9`,
       from: { name: 'Ada', email: 'ada@contoso.com' },
       summary: '**deploy**',
+      webUrl: `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/9?groupId=${TEAM}&parentMessageId=1`,
     });
+  });
+
+  it('keeps the IDs when the link is the bare form that names no root', () => {
+    // Seen on 2026-10-29: `webLink` was `/l/message/{channelId}/{id}` with no query at all.
+    const hit = normalizeSearchHit({
+      resource: {
+        id: '9',
+        channelIdentity: { teamId: TEAM, channelId: CHANNEL },
+        webLink: `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/9`,
+      },
+    });
+    expect(hit).toMatchObject({ ref: `${TEAM}/${CHANNEL}/9`, channel: { teamId: TEAM, channelId: CHANNEL } });
   });
 
   it('falls back to IDs when the hit links somewhere other than Teams', () => {

@@ -40,7 +40,11 @@ scopes stay out of `READ_SCOPES`, so writing is something a person opts into at 
 
 Each takes the references 0002 already parses. `channel post` accepts "Team/Channel" by name.
 `message reply` accepts a channel message, and a reply's ref replies to its thread, because Teams
-threads are one level deep (`ref.rootId ?? ref.messageId`). A chat message given to
+threads are one level deep (`ref.rootId ?? ref.messageId`). A ref that names only a reply (a
+search hit's can, see 0002) posts under the reply, Graph refuses it with nothing posted (seen on
+2026-10-29 as 400 `PostOperationNotSupported-Cannot create post on reply message`), and the reply's
+thread is then found among the channel's newest posts and posted to. That lookup needs
+`ChannelMessage.Read.All`; a write-only token keeps the 404, which names the way out. A chat message given to
 `message reply` is a `ConfigError` that names `teams chat send`: chats have no threads.
 
 ### The message
