@@ -238,7 +238,7 @@ describe('gatherMessageContext (design 0006)', () => {
   });
 
   it('places reply hits whose link does not name their root into one thread, read once', async () => {
-    // What the SiplySF tenant returned on 2026-10-29: bare links, so every hit's ref names only itself.
+    // What a real tenant returned on 2026-10-29: bare links, so every hit's ref names only itself.
     routeSearch([
       hit('105', 'five', 'channel', 'bare'),
       hit('101', 'one', 'channel', 'bare'),
