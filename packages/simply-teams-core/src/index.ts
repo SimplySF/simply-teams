@@ -193,3 +193,4 @@ export {
   type TeamsChannel,
   type TeamsTeam,
 } from './operations.js';
+export { ROOT_SCAN_PAGE_SIZE, ROOT_SCAN_PAGES, ThreadRoots } from './thread-root.js';

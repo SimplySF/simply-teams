@@ -117,8 +117,17 @@ fetches the full message.
 This was added during implementation: an agent should not have to rebuild
 `teamId/channelId/rootId/replyId` from separate fields to follow up on a result.
 
-- **Search hits** carry no reply-to ID, so their `ref` is taken from the hit's `webUrl` when it is a
-  Teams link (a reply's link names its root post). Otherwise it is built from the IDs.
+- **Search hits** carry no reply-to ID. Their Teams link is read for the root post it may name, and
+  otherwise the `ref` is built from the IDs. Two things learned on 2026-10-29, against a real
+  tenant: the search API names the link `webLink`, not `webUrl` as a message does (the code had
+  read `webUrl`, so the link was never used); and the link can be the bare
+  `/l/message/{channelId}/{id}` form, with no `groupId` or `parentMessageId`, which names no root
+  and would even parse as a chat message. So the link is never trusted over the IDs: it can only
+  add a root. A ref that names only a reply is still usable: `message view`, `message context` and
+  `message reply` find its root among the channel's newest posts (`ThreadRoots`: up to three pages
+  of 50, replies expanded, read only as far as needed and once per call), because Graph serves a
+  reply only under its root and answers 404 for the reply's own ID, exactly as for a deleted post.
+  A reply to an older post than the scan reaches is reported as not found, with both cases named.
 - **Chat message links** were checked against real data: on 2026-10-21, the parsed `webUrl` of all
   241 messages sampled from 8 chats round-tripped to the message's exact chat and message ID.
 

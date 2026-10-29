@@ -100,6 +100,8 @@ describe('@simplysf/simply-teams-core', () => {
         'secretsIn',
         'cleanResult',
         'rehideDeep',
+        'ROOT_SCAN_PAGE_SIZE',
+        'ROOT_SCAN_PAGES',
         'restoreInput',
         // rendering
         'formatKeyValue',
@@ -139,6 +141,7 @@ describe('@simplysf/simply-teams-core', () => {
         'searchGraph',
         'searchMessages',
         'viewMessage',
+        'ThreadRoots',
         'planChannelPost',
         'planChannelReply',
         'planChatSend',

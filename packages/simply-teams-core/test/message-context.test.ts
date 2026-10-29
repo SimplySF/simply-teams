@@ -57,14 +57,19 @@ function raw(id: string, text: string, where: Record<string, unknown>, extra: Re
 
 const channelWhere = { channelIdentity: { teamId: TEAM, channelId: CHANNEL } };
 
-/** A search hit shaped like Graph's, with the webUrl a channel reply carries (its root is in the link). */
+/**
+ * A search hit shaped like Graph's. Its Teams link is `webLink`; on some tenants a channel reply's
+ * link names its root (`parentMessageId`), on others it is the bare form, which `rootId: 'bare'`
+ * reproduces.
+ */
 function hit(id: string, summary: string, where: 'channel' | 'chat', rootId?: string) {
+  const link = `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/${id}`;
   const resource =
     where === 'channel'
       ? {
           id,
           channelIdentity: { teamId: TEAM, channelId: CHANNEL },
-          webUrl: `https://teams.microsoft.com/l/message/${encodeURIComponent(CHANNEL)}/${id}?groupId=${TEAM}&parentMessageId=${rootId ?? id}`,
+          webLink: rootId === 'bare' ? link : `${link}?groupId=${TEAM}&parentMessageId=${rootId ?? id}`,
         }
       : { id, chatId: CHAT };
   return {
@@ -230,6 +235,27 @@ describe('gatherMessageContext (design 0006)', () => {
     const result = await gatherMessageContext(graph(), 'x', {}, { threads: 1, context: 2, maxChars: 24_000 });
     expect(result.threads[0]?.hits).toBe(1);
     expect(result.threads[0]?.hitIds).toStrictEqual(['5']);
+  });
+
+  it('places reply hits whose link does not name their root into one thread, read once', async () => {
+    // What the SiplySF tenant returned on 2026-10-29: bare links, so every hit's ref names only itself.
+    routeSearch([
+      hit('105', 'five', 'channel', 'bare'),
+      hit('101', 'one', 'channel', 'bare'),
+      hit('100', 'root', 'channel', 'bare'),
+    ]);
+    server.route(channelBase, (_req, res) =>
+      respondJson(res, 200, { value: [{ id: '100', replies: [{ id: '101' }, { id: '105' }] }] }),
+    );
+    routeChannelThread('100', ['101', '105']);
+    const result = await gatherMessageContext(graph(), 'x', {}, { threads: 5, context: 5, maxChars: 24_000 });
+    expect(result.threads).toHaveLength(1);
+    expect(result.threads[0]?.hitIds).toStrictEqual(['105', '101', '100']);
+    expect(result.threads[0]?.messages.map((message) => message.id)).toStrictEqual(['100', '101', '105']);
+    expect(result.skipped).toBe(0);
+    // The channel was scanned once for all three hits, and the thread read once.
+    expect(server.requests.filter((request) => request.url.startsWith(`${channelBase}?`))).toHaveLength(1);
+    expect(server.requests.filter((request) => request.url.startsWith(`${channelBase}/100`))).toHaveLength(2);
   });
 
   it('skips a thread whose message was deleted since it was indexed, rather than failing the call', async () => {

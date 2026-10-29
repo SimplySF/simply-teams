@@ -72,7 +72,10 @@ interface ContextThread {
   a channel hit, or the messages either side of a chat hit. Threads are read one at a time, because
   Graph throttles per app and tenant. A thread that cannot be read (a meeting chat the user has
   left answers 403, a message deleted since it was indexed answers 404) is skipped and counted, not
-  fatal. Any other failure, a 429 or 5xx that outlasted the retries included, fails the call, so a
+  fatal. A channel hit whose ref names only the message is placed in its thread before grouping,
+  from the channel's newest posts (see 0002, _Search hits_): a reply read as a root also answers
+  404, and until 2026-10-29 every such hit was skipped as "deleted", so a thread with more matching
+  replies than the `threads` cap vanished whole. Two replies to one post now make one thread. Any other failure, a 429 or 5xx that outlasted the retries included, fails the call, so a
   throttled tenant is reported rather than hidden behind "more threads not shown".
 - **Naming.** `where` is best effort: team and channel names come from `team list` and
   `channel list`, a chat's topic or type from `GET /chats/{id}`, each fetched once per run. A
