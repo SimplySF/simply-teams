@@ -34,7 +34,7 @@
     "simply-teams-mcp": "./bin/run.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@oclif/core": "^4.11.2",
     "@simplysf/simply-teams-auth": "workspace:^0.0.0",
     "@simplysf/simply-teams-core": "workspace:^0.0.0",
