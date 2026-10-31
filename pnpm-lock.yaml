@@ -118,8 +118,8 @@ importers:
   packages/simply-teams-auth:
     dependencies:
       '@azure/msal-node':
-        specifier: ^7.1.0
-        version: 7.1.0
+        specifier: ^7.1.2
+        version: 7.1.2
       '@azure/msal-node-extensions':
         specifier: ^5.5.2
         version: 5.5.2
@@ -265,6 +265,10 @@ packages:
     resolution: {integrity: sha512-HOBR0Gfo39TMrkxNG8k6cfjRkrRjXZc3JQs3ebMWQc9S4cihuknMYra3sgmzbZB752oQBqBN9+WF7c826p2vIQ==}
     engines: {node: '>=0.8.0'}
 
+  '@azure/msal-common@16.15.0':
+    resolution: {integrity: sha512-lwdLb1B9Q5nEhPLVIKe78XH5wFMN15fCiDkY7ylPDSWZuWcD93G3jpJajrKhO3CQld8SLKz0sHiOi24mxdvtsg==}
+    engines: {node: '>=0.8.0'}
+
   '@azure/msal-node-extensions@5.5.2':
     resolution: {integrity: sha512-vPSHT6nque5wl/AVEh4PqLpKtTD3jtYJ1V7gHJwci0q+itMDIzG1h9DsQErs8Hbg41da/k2xYZoKvzZEC9IOOw==}
     engines: {node: '>=20'}
@@ -272,8 +276,8 @@ packages:
   '@azure/msal-node-runtime@0.20.6':
     resolution: {integrity: sha512-89Al7l5c8sOEA954d35WZOg1sCa2WKfgf7KyTbN9vIkKsoZrXdJ5+CPjy8+tQqWcsJTAMbQD4OWr7V09/xN8KA==}
 
-  '@azure/msal-node@7.1.0':
-    resolution: {integrity: sha512-s1O6hSY/C/dmqykTmmeHY6GhSkDuY8N1gxyhuLyaCwbY7N+UBvU2Wu4flas7+NxZiAPcXNPVpgt3n/HP/5yL+w==}
+  '@azure/msal-node@7.1.2':
+    resolution: {integrity: sha512-52hKQLGpEQzwNufIXG1SPVU+wQ3RIe7Rp2+g+VdAmZojCAZ6yCdGEffzQEQ6RnBZGBEs40nl14rWBmfJpCoHsg==}
     engines: {node: '>=20'}
 
   '@babel/code-frame@7.29.7':
@@ -1290,6 +1294,7 @@ packages:
   '@smithy/core@3.36.0':
     resolution: {integrity: sha512-3hJiwG1F5t1SoXqp/yOCmYXziyx7ZVqF63S5W6YU201e/qwVaHPex+E/3vvyY9a3ORq/b+BydeNZpP2saQ9X2g==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -2655,6 +2660,7 @@ packages:
   http-call@5.3.0:
     resolution: {integrity: sha512-ahwimsC23ICE4kPl9xTBjKB4inbRaeLyZeRunC/1Jy/Z6X8tv22MEAjK+KBOMSVLaqXPTTmd8638waVIKLGx2w==}
     engines: {node: '>=8.0.0'}
+    deprecated: Renamed to @heroku/http-call — please install @heroku/http-call instead.
 
   http-errors@2.0.1:
     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
@@ -4707,6 +4713,8 @@ snapshots:
 
   '@azure/msal-common@16.14.2': {}
 
+  '@azure/msal-common@16.15.0': {}
+
   '@azure/msal-node-extensions@5.5.2':
     dependencies:
       '@azure/msal-common': 16.14.2
@@ -4715,9 +4723,9 @@ snapshots:
 
   '@azure/msal-node-runtime@0.20.6': {}
 
-  '@azure/msal-node@7.1.0':
+  '@azure/msal-node@7.1.2':
     dependencies:
-      '@azure/msal-common': 16.14.2
+      '@azure/msal-common': 16.15.0
       jsonwebtoken: 9.0.3
 
   '@babel/code-frame@7.29.7':
