@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@azure/msal-node": "^7.1.0",
-    "@azure/msal-node-extensions": "^5.5.2",
+    "@azure/msal-node-extensions": "^5.5.4",
     "@simplysf/simply-teams-core": "workspace:^0.0.0"
   },
   "devDependencies": {
